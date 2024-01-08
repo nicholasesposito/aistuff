@@ -1,71 +1,84 @@
 import numpy as np
 
 def expm(x):
-    if abs(x) > 0.2:
+    x = np.float(x)
+    if abs(x) > 0.5:
         e = np.exp(x) - 1.0
     else:
-        p = x
-        e = p
+        p = np.float(x)
+        e = np.float(p)
         for i in range(2, 20):
-            p = p * x / i
+            p = (p * x) / i
             e = e + p
             if abs(p) <= abs(e * np.finfo(float).eps):
-                return e
+                return np.float(e)
 
 def expmm(x):
-    if abs(x) > 0.2:
+    x = np.float(x)
+    if abs(x) > 0.5:
         e = np.exp(x) - 1.0 - x
     else:
-        p = x * x * 0.5
-        e = p
+        p = np.float(x * x * 0.5)
+        e = np.float(p)
         for i in range(3, 26):
-            p = p * x / i
+            p = (p * x) / i
             e = e + p
             if abs(p) <= abs(e * np.finfo(float).eps):
-                return e
+                return np.float(e)
 
 def coshm(x):
-    return 2 * np.sinh(x * 0.5) ** 2
+    x = np.float(x)
+    return np.float(2) * np.sinh(x * 0.5) ** 2
 
 def sinhm(x):
-    if abs(x) > 0.2:
+    x = np.float(x)
+    if abs(x) > 0.5:
         s = np.sinh(x) - x
     else:
-        p = x ** 3 / 6
-        s = p
-        xx = x * x
+        p = np.float(x ** 3 / 6)
+        s = np.float(p)
+        xx = np.float(x * x)
         for i in range(5, 20, 2):
-            p = p * xx / (i * (i - 1))
+            p = p * xx / (i * (i - 1.0))
             s = s + p
             if abs(p) <= abs(s * np.finfo(float).eps):
-                return s
+                return np.float(s)
 
 def coshmm(x):
+    x = np.float(x)
     xh = x * 0.5
     return sinhm(xh) * (2 * np.sinh(xh) + x)
 
 def xcms(x):
-    if abs(x) > 0.2:
-        e = x * coshm(x) - sinhm(x)
+    x = np.float(x)
+    if abs(x) > 0.5:
+        e = np.float(x * coshm(x) - sinhm(x))
     else:
-        p = x ** 3 / 3
-        e = p
+        p = np.float(x ** 3 / 3)
+        e = np.float(p)
         xx = x * x
         for i in range(2, 16):
             i2 = i * 2
             p = p * xx / (i2 * (i2 + 1))
             e = e + i * p
             if abs(p) <= abs(e * np.finfo(float).eps):
-                return e
+                return np.float(e)
 
 def enbase_t(tspan, hspan):
-    if tspan < 0:
+    tspan = np.float(tspan)
+    hspan = np.float(hspan)
+    if tspan < 0.0:
         raise ValueError("In enbase_t; thspan must be positive")
-    if hspan == 0:
+    if hspan == 0.0:
         return 1.0
-    return hspan ** 2 / expmm(-tspan) * 0.5
+    return (hspan ** 2 / expmm(-tspan)) * 0.5
+
 
 def tbnewton(nh, m, bigT, halfgate, hgts, hs, hgtp, p, q, te, dhdt, FF):
+    nh = int(nh)
+    m = int(m)
+
+
     gate = 2 * halfgate / bigT
     tr = hgtp * halfgate / bigT
     for i in range(nh):
