@@ -1,5 +1,9 @@
 import numpy as np
 
+halfgate = np.float(30.0)
+bigT = np.float(120.0)
+heps = np.float(0.01)
+
 def expm(x):
     x = np.float(x)
     if abs(x) > 0.5:
@@ -74,11 +78,16 @@ def enbase_t(tspan, hspan):
     return (hspan ** 2 / expmm(-tspan)) * 0.5
 
 
-def tbnewton(nh, m, bigT, halfgate, hgts, hs, hgtp, p, q, te, dhdt, FF):
+def tbnewton(nh, m, hgts, hs, hgtp, p, q):
+    nit = int(12)
+
     nh = int(nh)
     m = int(m)
-
-
+    hgts = np.float(hgts)
+    hs = np.float(hs)
+    hgtp = np.float(hgtp)
+    p = np.float(p) 
+    q = np.float(q) 
     gate = 2 * halfgate / bigT
     tr = hgtp * halfgate / bigT
     for i in range(nh):
@@ -107,7 +116,19 @@ def tbnewton(nh, m, bigT, halfgate, hgts, hs, hgtp, p, q, te, dhdt, FF):
             print("tee,he,hac,heps,dhadt:", tee, he, hac, np.finfo(float).eps, dhadt)
         te[i] = tee
 
-def ubnewton(nh, m, halfgate, hgts, hs, hgtp, p, q, te, dhdt, FF):
+        return te, dhdt, FF
+
+def ubnewton(nh, m, hgts, hs, hgtp, p, q):
+    nit = int(12)
+
+    nh = int(nh)
+    m = int(m)
+    hgts = np.float(hgts)
+    hs = np.float(hs)
+    hgtp = np.float(hgtp)
+    p = np.float(p)
+    q = np.float(q)
+
     gate = 2 * halfgate
     tr = hgtp * halfgate
     for i in range(nh):
@@ -115,7 +136,7 @@ def ubnewton(nh, m, halfgate, hgts, hs, hgtp, p, q, te, dhdt, FF):
         he = hs[i]
         it = 1
         while it <= 12:
-            eval_uspline(m, tr, p, q, tee, hac, dhadt)
+            eval_uspline(m, tr, p, q, tee, hac, dhadt)  #NE CHECK
             if it == 1:
                 dhdt[i] = dhadt
             if dhadt == 0:
@@ -136,7 +157,9 @@ def ubnewton(nh, m, halfgate, hgts, hs, hgtp, p, q, te, dhdt, FF):
             print("tee,he,hac,heps,dhadt:", tee, he, hac, np.finfo(float).eps, dhadt)
         te[i] = tee
 
-def fit_gtspline(n, xs, ys, on, q, j, yac, en, FF):
+    return te, dhdt, FF
+
+def fit_gtspline(n, xs, ys, on):
     m = 0
     xa = np.zeros(n)
     ya = np.zeros(n)
@@ -161,6 +184,8 @@ def fit_gtspline(n, xs, ys, on, q, j, yac, en, FF):
         else:
             eval_tsplined(m, xa[:m], ya[:m], qa[:m], xs[i], yac[i], q[i])
             j[i] = 0
+
+    return q, j, yac, en, FF
 
 def fit_tspline(n, xs, p, q, j, en, FF):
     if n < 1:
