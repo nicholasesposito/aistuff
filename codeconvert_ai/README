@@ -4,10 +4,12 @@ As of 1/10 at 11:42 AM
    They have been merged. Needs some review and some comments
 
 2. input1 through input5 are pspl.f90 in order.
-   They have not been merged yet.
+   Merged into pspl_merged.py 
    input1 is somewhat reviewed though I'm not sure if I'm doing it 
       correctly. Also all need comments.
 
 3. orders.f is from NCEPLIBS-w3emc
 https://github.com/NOAA-EMC/NCEPLIBS-w3emc/blob/develop/src/orders.f
-   Has not been converted to python yet.
+   Somewhat converted but I don't like the new output. 
+   Maybe redo with codeconvertai.
+   For now, it's in orders.py 

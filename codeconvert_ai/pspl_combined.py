@@ -5,6 +5,8 @@ bigT = np.float(120.0)
 heps = np.float(0.01)
 
 def expm(x):
+# exp(x)-1 (approximately x for small x)
+# = I^(1)exp(x), where I^(p) is the integral iterated p times
     x = np.float(x)
     if abs(x) > 0.5:
         e = np.exp(x) - 1.0
@@ -15,9 +17,14 @@ def expm(x):
             p = (p * x) / i
             e = e + p
             if abs(p) <= abs(e * np.finfo(float).eps):
-                return np.float(e)
+                break
+
+    return np.float(e)
+
 
 def expmm(x):
+# exp(x)-1-x (approximately x^2/2 for small x)
+# = I^(2)exp(x), where I^(p) is the integral iterated p times
     x = np.float(x)
     if abs(x) > 0.5:
         e = np.exp(x) - 1.0 - x
@@ -28,13 +35,20 @@ def expmm(x):
             p = (p * x) / i
             e = e + p
             if abs(p) <= abs(e * np.finfo(float).eps):
-                return np.float(e)
+                break
+
+    return np.float(e)
+
 
 def coshm(x):
+# exp(x)-1-x (approximately x^2/2 for small x)
+# = I^(2)exp(x), where I^(p) is the integral iterated p times
     x = np.float(x)
     return np.float(2) * np.sinh(x * 0.5) ** 2
 
 def sinhm(x):
+# sinh(x)-x (approximately x**3/6 for small x)
+# =I^(3)cosh(x), where I^(p) is the integral iterated p times
     x = np.float(x)
     if abs(x) > 0.5:
         s = np.sinh(x) - x
@@ -46,14 +60,21 @@ def sinhm(x):
             p = p * xx / (i * (i - 1.0))
             s = s + p
             if abs(p) <= abs(s * np.finfo(float).eps):
-                return np.float(s)
+                break
+
+    return np.float(s)
+
 
 def coshmm(x):
+# cosh(x)-1-x^2/2  (approximately x**4/24 for small x)
+# =I^(4)cosh(x), where I^(p) is the integral iterated p times
     x = np.float(x)
     xh = x * 0.5
     return sinhm(xh) * (2 * np.sinh(xh) + x)
 
+
 def xcms(x):
+# x*coshm(x)-sinhm(x) (approximately x**3/3 for small x)
     x = np.float(x)
     if abs(x) > 0.5:
         e = np.float(x * coshm(x) - sinhm(x))
@@ -66,19 +87,44 @@ def xcms(x):
             p = p * xx / (i2 * (i2 + 1))
             e = e + i * p
             if abs(p) <= abs(e * np.finfo(float).eps):
-                return np.float(e)
+                break
+    return np.float(e)
+
 
 def enbase_t(tspan, hspan):
+# For a nondimensional time span, tspan, but a dimensional height
+# span, hspan, return the baseline minimum possible tensioned spline
+# energy integrated over the central span plus the two wings.
+# If the hspan vanishes, return a nominal unit energy.
+# The energy is quadratic in hspan, which can therefore be of either sign,
+# but tspan must be strictly positive for a meaningful positive energy.
     tspan = np.float(tspan)
     hspan = np.float(hspan)
     if tspan < 0.0:
-        raise ValueError("In enbase_t; thspan must be positive")
+        raise ValueError("In enbase_t; tspan must be positive")
     if hspan == 0.0:
         return 1.0
     return (hspan ** 2 / expmm(-tspan)) * 0.5
 
 
 def tbnewton(nh, m, hgts, hs, hgtp, p, q):
+# Perform a "bounded Newton" iteration to estimate the vertical velocity,
+# dh/dt, as the trajectory passes through the nh "gates", each at height
+# hs(i) and centered at time hgts(i)*halfgate with the halfwidth of the gate 
+# equal to halfgate. The characteristic timescale of the fitted spline is bigT.
+# the time-nodes rescaled by this bigT are at the m points tp, and the 
+# corresponding "p" and "q" coefficients of the tensioned spline are p and q
+# respectively. 
+# The output is an array of n estimates, dh/dt, at each gate's hs. This
+# involves estimating the time t of passage through each gate, and is done
+# generically by Newton's method, except that the newton increments are
+# bounded to be within a range "gate" = 2*halfgate, so that we eliminate
+# wild excursions when dh/dt is actually very small (or vanishes). When such
+# an excursion is detected, the returned value of dh/dt is simply that
+# evaluated at ts(i), and no further attempt at Newton refinement is made
+# at this i. (The vertical motion in such cases is essentially negligible
+# in any case, and very likely is multivalued as the trajectory wavers about
+# this gate's value of hs(i).)
     nit = int(12)
 
     nh = int(nh)
@@ -93,8 +139,11 @@ def tbnewton(nh, m, hgts, hs, hgtp, p, q):
     for i in range(nh):
         tee = hgts[i] * halfgate / bigT
         he = hs[i]
+#  Use Newton iterations to estimate the rescaled time, tee, at which the 
+#  height is he
         it = 1
         while it <= 12:
+# NickE
             eval_tspline(m, tr, p, q, tee, hac, dhadt)
             if it == 1:
                 dhdt[i] = dhadt / bigT
@@ -105,7 +154,7 @@ def tbnewton(nh, m, hgts, hs, hgtp, p, q):
             if abs(dt) > gate:
                 print("WARNING! In tbnewton; i,it,dt/gate =", i, it, dt / gate)
                 break
-            if abs(dh) < np.finfo(float).eps:
+            if abs(dh) < heps: 
                 dhdt[i] = dhadt / bigT
                 break
             tee = tee + dt
@@ -116,9 +165,10 @@ def tbnewton(nh, m, hgts, hs, hgtp, p, q):
             print("tee,he,hac,heps,dhadt:", tee, he, hac, np.finfo(float).eps, dhadt)
         te[i] = tee
 
-        return te, dhdt, FF
+    return te, dhdt, FF
 
 def ubnewton(nh, m, hgts, hs, hgtp, p, q):
+#  Like tbnewton, but for the case of untensioned (i.e., cubic) splines
     nit = int(12)
 
     nh = int(nh)
@@ -134,9 +184,11 @@ def ubnewton(nh, m, hgts, hs, hgtp, p, q):
     for i in range(nh):
         tee = hgts[i] * halfgate
         he = hs[i]
+#  Use Newton iterations to estimate the rescaled time, tee, at which the 
+#  height is he
         it = 1
-        while it <= 12:
-            eval_uspline(m, tr, p, q, tee, hac, dhadt)  #NE CHECK
+        while it <= nit:
+            eval_uspline(m, tr, p, q, tee, hac, dhadt)  #NickE CHECK
             if it == 1:
                 dhdt[i] = dhadt
             if dhadt == 0:
@@ -146,20 +198,26 @@ def ubnewton(nh, m, hgts, hs, hgtp, p, q):
             if abs(dt) > gate:
                 print("WARNING! In ubnewton; i,it,dt/gate =", i, it, dt / gate)
                 break
-            if abs(dh) < np.finfo(float).eps:
+            if abs(dh) < heps:
                 dhdt[i] = dhadt
                 break
             tee = tee + dt
             it = it + 1
-        FF = it > 12
+        FF = it > nit
         if FF:
             print("In ubnewton; Newton iterations seem not to be converging at i=", i)
-            print("tee,he,hac,heps,dhadt:", tee, he, hac, np.finfo(float).eps, dhadt)
+            print("tee,he,hac,heps,dhadt:", tee, he, hac, heps, dhadt)
         te[i] = tee
 
     return te, dhdt, FF
 
 def fit_gtspline(n, xs, ys, on):
+# Fit the gappy tensioned spline, where only those nodes flagged "on"
+# are effective in the fitting procedure. Owing to the fact that, where
+# constraints are not "on" the spline will generally depart from ys, the
+# actual y (yac) is returned for all nodes, regardless of the partial
+# duplication with the given ys. In other respects, this is just
+# like fit_tspline.
     m = 0
     xa = np.zeros(n)
     ya = np.zeros(n)
@@ -170,10 +228,11 @@ def fit_gtspline(n, xs, ys, on):
             m = m + 1
             xa[m-1] = xs[i]
             ya[m-1] = ys[i]
+#NickE #####################
     fit_tspline(m, xa[:m], ya[:m], qa[:m], ja[:m], en, FF)
     if FF:
         print("In fit_gtspline; failure flag raised at call to fit_tspline")
-        return
+        return q, j, yac, en, FF
     k = 0
     for i in range(n):
         if on[i]:
@@ -182,6 +241,7 @@ def fit_gtspline(n, xs, ys, on):
             j[i] = ja[k-1]
             yac[i] = ys[i]
         else:
+#NickE   
             eval_tsplined(m, xa[:m], ya[:m], qa[:m], xs[i], yac[i], q[i])
             j[i] = 0
 
