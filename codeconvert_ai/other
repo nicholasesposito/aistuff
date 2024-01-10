@@ -1,0 +1,243 @@
+      SUBROUTINE ORDERS(IN,ISORT,IDATA,INDEX,N,M,I1,I2)
+
+      DIMENSION   ISORT(N),INDEX(N)
+      INTEGER(8)  IDATA(M,N),ICHEK,IBYT
+      REAL(8)     SMAL,RCHEK
+      DIMENSION   INDX(0:255),KNDX(0:255)
+      EQUIVALENCE (ICHEK,RCHEK)
+
+      ITYPE = MOD(IN,10)
+      IF(IN.LT.10) THEN
+         DO I=1,N
+         INDEX(I) = I
+         ENDDO
+      ENDIF
+
+      IF(I1.EQ.4) THEN
+         if(itype==0) CALL ORDEC4(IN,ISORT,IDATA,INDEX,N,M,I1,I2)
+         if(itype/=0) CALL ORDER4(IN,ISORT,IDATA,INDEX,N,M,I1,I2)
+         RETURN
+      ELSEIF(I1.EQ.8) then
+         IF(ITYPE==0) CALL ORDEC8(IN,ISORT,IDATA,INDEX,N,M,I1,I2)
+         IF(ITYPE==0) RETURN
+      ELSEIF(I1.NE.8) THEN
+         PRINT*,'ORDERS argument i1 (keyword size) can be 4 or 8'
+         PRINT*,'ORDERS argument i1 here=',i1
+         CALL ERREXIT(99_4)
+      ENDIF
+
+
+      IF(ITYPE.GT.0) THEN
+         SMAL = 1
+         DO I=1,N
+         ICHEK = IDATA(1,I)
+         IF(ITYPE.EQ.1 .AND. ICHEK.LT.SMAL) SMAL = ICHEK
+         IF(ITYPE.EQ.2 .AND. RCHEK.LT.SMAL) SMAL = RCHEK
+         ENDDO
+         SMAL = 1-SMAL
+         DO I=1,N
+         ICHEK = IDATA(1,I)
+         IF(ITYPE.EQ.1) ICHEK = ICHEK+SMAL
+         IF(ITYPE.EQ.2) RCHEK = RCHEK+SMAL
+         IDATA(1,I) = ICHEK
+         ENDDO
+      ENDIF
+
+
+      DO IBYT=0,I1-1
+
+      KNDX(0) = 1
+      DO I=0,255
+      INDX(I) = 0
+      ENDDO
+
+      DO I=1,N
+      JBYT = IAND(ISHFT(IDATA(1,INDEX(I)),-IBYT*8_8),255_8)
+      INDX(JBYT) = INDX(JBYT)+1
+      ISORT(I) = INDEX(I)
+      ENDDO
+
+      DO I=1,255
+      KNDX(I) = KNDX(I-1)+INDX(I-1)
+      ENDDO
+
+      DO I=1,N
+      JBYT = IAND(ISHFT(IDATA(1,ISORT(I)),-IBYT*8_8),255_8)
+      INDEX(KNDX(JBYT)) = ISORT(I)
+      KNDX(JBYT) = KNDX(JBYT)+1
+      ENDDO
+
+      ENDDO
+
+
+      IF(ITYPE.GT.0) THEN
+         DO I=1,N
+         ICHEK = IDATA(1,I)
+         IF(ITYPE.EQ.1) ICHEK = ICHEK-SMAL
+         IF(ITYPE.EQ.2) RCHEK = RCHEK-SMAL
+         IDATA(1,I) = ICHEK
+         ENDDO
+      ENDIF
+
+
+      RETURN
+      END
+C-
+      SUBROUTINE ORDER4(IN,ISORT,IDATA,INDEX,N,M,I1,I2)
+
+      DIMENSION   ISORT(N),INDEX(N)
+      INTEGER(4)  IDATA(M,N),ICHEK,IBYT
+      REAL(4)     SMAL,RCHEK
+      DIMENSION   INDX(0:255),KNDX(0:255)
+      EQUIVALENCE (ICHEK,RCHEK)
+
+      ITYPE = MOD(IN,10)
+      IF(IN.LT.10) THEN
+         DO I=1,N
+         INDEX(I) = I
+         ENDDO
+      ENDIF
+
+      IF(ITYPE.GT.0) THEN
+         SMAL = 1
+         DO I=1,N
+         ICHEK = IDATA(1,I)
+         IF(ITYPE.EQ.1 .AND. ICHEK.LT.SMAL) SMAL = ICHEK
+         IF(ITYPE.EQ.2 .AND. RCHEK.LT.SMAL) SMAL = RCHEK
+         ENDDO
+         SMAL = 1-SMAL
+         DO I=1,N
+         ICHEK = IDATA(1,I)
+         IF(ITYPE.EQ.1) ICHEK = ICHEK+SMAL
+         IF(ITYPE.EQ.2) RCHEK = RCHEK+SMAL
+         IDATA(1,I) = ICHEK
+         ENDDO
+      ENDIF
+
+
+      DO IBYT=0,I1-1
+
+      KNDX(0) = 1
+      DO I=0,255
+      INDX(I) = 0
+      ENDDO
+
+      DO I=1,N
+      JBYT = IAND(ISHFT(IDATA(1,INDEX(I)),-IBYT*8_4),255_4)
+      INDX(JBYT) = INDX(JBYT)+1
+      ISORT(I) = INDEX(I)
+      ENDDO
+
+      DO I=1,255
+      KNDX(I) = KNDX(I-1)+INDX(I-1)
+      ENDDO
+
+      DO I=1,N
+      JBYT = IAND(ISHFT(IDATA(1,ISORT(I)),-IBYT*8_4),255_4)
+      INDEX(KNDX(JBYT)) = ISORT(I)
+      KNDX(JBYT) = KNDX(JBYT)+1
+      ENDDO
+
+      ENDDO
+
+
+      IF(ITYPE.GT.0) THEN
+         DO I=1,N
+         ICHEK = IDATA(1,I)
+         IF(ITYPE.EQ.1) ICHEK = ICHEK-SMAL
+         IF(ITYPE.EQ.2) RCHEK = RCHEK-SMAL
+         IDATA(1,I) = ICHEK
+         ENDDO
+      ENDIF
+
+
+      RETURN
+      END
+      SUBROUTINE ORDEC8(IN,ISORT,IDATA,INDEX,N,M,I1,I2)
+
+      DIMENSION    ISORT(N),INDEX(N)
+      character(8) IDATA(M,N)
+      DIMENSION    INDX(0:255),KNDX(0:255)
+
+      ITYPE = MOD(IN,10)
+      IF(IN.LT.10) THEN
+         DO I=1,N
+         INDEX(I) = I
+         ENDDO
+      ENDIF
+
+
+      DO IBYT=0,I1-1
+
+      KNDX(0) = 1
+      DO I=0,255
+      INDX(I) = 0
+      ENDDO
+
+      II=I1-IBYT
+
+      DO I=1,N
+      JBYT = ICHAR(IDATA(1,INDEX(I))(II:II))
+      INDX(JBYT) = INDX(JBYT)+1
+      ISORT(I) = INDEX(I)
+      ENDDO
+
+      DO I=1,255
+      KNDX(I) = KNDX(I-1)+INDX(I-1)
+      ENDDO
+
+      DO I=1,N
+      JBYT = ICHAR(IDATA(1,isort(I))(II:II))
+      INDEX(KNDX(JBYT)) = ISORT(I)
+      KNDX(JBYT) = KNDX(JBYT)+1
+      ENDDO
+
+      ENDDO
+
+
+      RETURN
+      END
+      SUBROUTINE ORDEC4(IN,ISORT,IDATA,INDEX,N,M,I1,I2)
+
+      DIMENSION    ISORT(N),INDEX(N)
+      character(4) IDATA(M,N)
+      DIMENSION    INDX(0:255),KNDX(0:255)
+
+      ITYPE = MOD(IN,10)
+      IF(IN.LT.10) THEN
+         DO I=1,N
+         INDEX(I) = I
+         ENDDO
+      ENDIF
+
+
+      DO IBYT=0,I1-1
+
+      KNDX(0) = 1
+      DO I=0,255
+      INDX(I) = 0
+      ENDDO
+
+      II=I1-IBYT
+
+      DO I=1,N
+      JBYT = ICHAR(IDATA(1,INDEX(I))(II:II))
+      INDX(JBYT) = INDX(JBYT)+1
+      ISORT(I) = INDEX(I)
+      ENDDO
+
+      DO I=1,255
+      KNDX(I) = KNDX(I-1)+INDX(I-1)
+      ENDDO
+
+      DO I=1,N
+      JBYT = ICHAR(IDATA(1,isort(I))(II:II))
+      INDEX(KNDX(JBYT)) = ISORT(I)
+      KNDX(JBYT) = KNDX(JBYT)+1
+      ENDDO
+
+      ENDDO
+
+
+      RETURN
+      END
