@@ -14,7 +14,7 @@
 # https://github.com/NOAA-EMC/prepobs/blob/develop/sorc/
 #           prepobs_prepacqc.fd/pmat2.f90
 # in order to reduce the number of calls/references
-################################################################
+#####################################################################
 #
 # The original code was run with print statements to determine
 # which variables from the original pspl.f90 code were used commonly.
@@ -25,7 +25,7 @@
 # fit_gtspline fit_tspline int_tspline next_route set_posts
 # slalom_tspline tbnewton
 #
-# while the following functions and subroutines were not called during
+# The following functions and subroutines were not called during
 # the specific period in which the code was tested:
 # coshmm eval_itspline eval_iuspline eval_tsplineddd eval_tsplinedd
 # eval_tspline eval_usplineddd eval_usplinedd eval_usplined
@@ -36,7 +36,7 @@
 # keep all of the functions and subroutines should they need to be 
 # called/used at a later time.
 #
-#
+#####################################################################
 #
 import numpy as np
 
@@ -202,8 +202,10 @@ def tbnewton(nh, m, hgts, hs, hgtp, p, q):
             it = it + 1
         FF = it > 12
         if FF:
-            print("In tbnewton; Newton iterations seem not to be converging at i=", i)
-            print("tee,he,hac,heps,dhadt:", tee, he, hac, np.finfo(float).eps, dhadt)
+            print("In tbnewton; Newton iterations seem not to be converging \\
+                   at i=", i)
+            print("tee,he,hac,heps,dhadt:", tee, he, hac, np.finfo(float).eps,
+                   dhadt)
         te[i] = tee
 
     return te, dhdt, FF
@@ -246,7 +248,8 @@ def ubnewton(nh, m, hgts, hs, hgtp, p, q):
             it = it + 1
         FF = it > nit
         if FF:
-            print("In ubnewton; Newton iterations seem not to be converging at i=", i)
+            print("In ubnewton; Newton iterations seem not to be converging \\
+                  at i=", i)
             print("tee,he,hac,heps,dhadt:", tee, he, hac, heps, dhadt)
         te[i] = tee
 
@@ -519,8 +522,8 @@ def fit_uspline(n, xs, p):
             FF = True
             print("In fit_uspline; xs data must increase strictly monotonically")
             return 
-# Initialize qq = np.zeros((n, 2)) b/c symmetric tridiagonal, kernel for q^T*QQ*q
-#    where "q" are the dp/dx at each node.
+# Initialize qq = np.zeros((n, 2)) b/c symmetric tridiagonal, kernel for 
+#    q^T*QQ*q where "q" are the dp/dx at each node.
 # The coefficients in the quadratic form defining the spline energy also
 # include terms involving factors (p(ip)-p(i))*(q(i)+q(ip)) and
 # (p(ip)-p(i))*(p(ip)-p(i)), but these can be dealt with using, respectively,
@@ -1186,7 +1189,7 @@ def best_tslalom(nh, mh, doru, hgts, hs, halfgate, bigT):
     count_routes(mh, code, route_count, FF)
     maxrts = max(maxrts, route_count)
     if FF:
-        print('In best_tslalom; failure flag was raised in call to count_routes')
+        print('In best_tslalom; failure flag raised in call to count_routes')
         return
     if route_count > 4:
 #NickE call
@@ -1201,12 +1204,13 @@ def best_tslalom(nh, mh, doru, hgts, hs, halfgate, bigT):
             break
 #NickE multiple calls
         set_posts(mh, mode, hgtn, hn, bend, hgtp, hp, off)
-        slalom_tspline(m, bend, hgtp, hp, off, bigT, q, ya, en, ita, maxitb, ittot, FF)
+        slalom_tspline(m, bend, hgtp, hp, off, bigT, q, ya, en, ita, maxitb,
+                       ittot, FF)
         en = en / enbase_t(tspan, hspan)
         maxita = max(maxita, ita)
         maxit = max(maxit, ittot)
         if FF:
-            print('In best_tslalom; failure flag was raised in call to slalom_tspline')
+            print('In best_tslalom; failure flag in call to slalom_tspline')
             return
         if en < enbest:
             modebest = mode
@@ -1233,7 +1237,7 @@ def best_uslalom(nh, mh, doru, hgts, hs, halfgate):
     count_routes(mh, code, route_count, FF)
     maxrts = max(maxrts, route_count)
     if FF:
-        print('In best_uslalom; failure flag was raised in call to count_routes')
+        print('In best_uslalom; failure flag raised in call to count_routes')
         return
     if route_count > 4:
         list_routes(mh, code)
@@ -1245,11 +1249,12 @@ def best_uslalom(nh, mh, doru, hgts, hs, halfgate):
             flag = False
             break
         set_posts(mh, mode, hgtn, hn, bend, hgtp, hp, off)
-        slalom_uspline(m, bend, hgtp, hp, off, halfgate, q, ya, en, ita, maxitb, ittot, FF)
+        slalom_uspline(m, bend, hgtp, hp, off, halfgate, q, ya, en, ita, 
+                       maxitb, ittot, FF)
         maxita = max(maxita, ita)
         maxit = max(maxit, ittot)
         if FF:
-            print('In best_uslalom; failure flag was raised in call to slalom_uspline')
+            print('best_uslalom; failure flag raised in call to slalom_uspline')
             return
         if en < enbest:
             modebest = mode
@@ -1764,12 +1769,14 @@ def slalom_uspline(n, bend, hgxn, yn, off, halfgate, q, ya, en, ita, ittot, FF):
         print('In slalom_uspline; exceeding the allocation of A iterations')
         return
 
-def convertd(n, halfgate, tdata, hdata, phof): #, doru, idx, hgts, hs, descending, FF):
+def convertd(n, tdata, hdata, phof): #, doru, idx, hgts, hs, descending, FF):
 # tdata (in single precision real hours) is discretized into bins of size
 # gate=2*halfgate (in units of seconds) and expressed as even integer units
 # hgts of halfgate that correspond to the mid-time of each bin. (The two
 # limits of each time-bin are odd integers in halfgate units.)
     hour = 3600
+    h = np.zeros(n)
+    hgts = np.zeros(n)
     FF = False
     if len(hdata) != n:
         raise ValueError('In convertd; inconsistent dimensions of hdata')
@@ -1835,18 +1842,23 @@ def convertd(n, halfgate, tdata, hdata, phof): #, doru, idx, hgts, hs, descendin
         if hgts[i] < hgts[i - 1]:
             print('In convertd; time sequence not monotonic', i, hgts[i], hgts[i - 1])
             FF = True
-            return
+            return doru, idx, hgts, hs, descending, FF
     for i in range(1, n):
         if upsign * (hs[i] - hs[i - 1]) < u0:
             print('In convertd; height sequence not monotonic')
             FF = True
-            return
+            return doru, idx, hgts, hs, descending, FF
 
-def convertd_back(n, halfgate, wdata, tdata, ws, hgts, idx, descending):
-    if len(wdata) != n:
-        raise ValueError('In convertd; inconsistent dimensions of wdata')
-    if len(tdata) != n:
-        raise ValueError('In convertd; inconsistent dimensions of tdata')
+    return doru, idx, hgts, hs, descending, FF
+
+
+def convertd_back(n, ws, hgts, idx, descending): #halfgate, wdata, tdata
+#    if len(wdata) != n:
+#        raise ValueError('In convertd; inconsistent dimensions of wdata')
+#    if len(tdata) != n:
+#        raise ValueError('In convertd; inconsistent dimensions of tdata')
+    wdata = np.zeros(n)
+    tdata = np.zeros(n)
     if len(ws) != n:
         raise ValueError('In convertd; inconsistent dimensions of ws')
     if len(hgts) != n:
@@ -1869,3 +1881,5 @@ def convertd_back(n, halfgate, wdata, tdata, ws, hgts, idx, descending):
         s = wdata[i]
         wdata[i] = wdata[j]
         wdata[j] = s
+
+    return wdata, tdata
