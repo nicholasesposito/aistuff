@@ -48,7 +48,8 @@ heps = np.float(0.01)
 def expm(x):
 # exp(x)-1 (approximately x for small x)
 # = I^(1)exp(x), where I^(p) is the integral iterated p times
-    x = np.float(x)
+
+    eps =  np.finfo(float).eps
     if abs(x) > 0.5:
         e = np.exp(x) - 1.0
     else:
@@ -56,8 +57,8 @@ def expm(x):
         e = np.float(p)
         for i in range(2, 20):
             p = (p * x) / i
-            e = e + p
-            if abs(p) <= abs(e * np.finfo(float).eps):
+            e += p
+            if abs(p) <= abs(e * eps):
                 break
 
     return np.float(e)
@@ -66,44 +67,53 @@ def expm(x):
 def expmm(x):
 # exp(x)-1-x (approximately x^2/2 for small x)
 # = I^(2)exp(x), where I^(p) is the integral iterated p times
-    x = np.float(x)
+
+    # Define the machine epsilon for floating-point arithmetic
+    eps = sys.float_info.epsilon
     if abs(x) > 0.5:
+        # For larger values of x, use the direct calculation
         e = np.exp(x) - 1.0 - x
     else:
         p = np.float(x * x * 0.5)
         e = np.float(p)
         for i in range(3, 26):
             p = (p * x) / i
-            e = e + p
-            if abs(p) <= abs(e * np.finfo(float).eps):
+            e += p
+            # If the addition of the new term does not change the result,
+            # it means we've reached the precision limit
+            if abs(p) <= abs(e * eps): 
                 break
 
     return np.float(e)
 
 
 def coshm(x):
+# Calculate a modified hyperbolic cosine value.
 # exp(x)-1-x (approximately x^2/2 for small x)
 # = I^(2)exp(x), where I^(p) is the integral iterated p times
     x = np.float(x)
-    return np.float(2) * np.sinh(x * 0.5) ** 2
+    return 2 * np.sinh(x * 0.5) ** 2
 
 def sinhm(x):
+# Calculate a modified hyperbolic sine of x.
 # sinh(x)-x (approximately x**3/6 for small x)
 # =I^(3)cosh(x), where I^(p) is the integral iterated p times
-    x = np.float(x)
+# Input x and output s should be float
+    eps = np.finfo(float).eps
+
     if abs(x) > 0.5:
         s = np.sinh(x) - x
     else:
-        p = np.float(x ** 3 / 6)
-        s = np.float(p)
-        xx = np.float(x * x)
+        p = np.float(x) ** 3 / 6
+        s = p 
+        xx = x * x
         for i in range(5, 20, 2):
             p = p * xx / (i * (i - 1.0))
-            s = s + p
-            if abs(p) <= abs(s * np.finfo(float).eps):
+            s += p
+            if abs(p) <= abs(s * eps):
                 break
 
-    return np.float(s)
+    return s 
 
 
 def coshmm(x):
@@ -116,20 +126,26 @@ def coshmm(x):
 
 def xcms(x):
 # x*coshm(x)-sinhm(x) (approximately x**3/3 for small x)
-    x = np.float(x)
+# NICKE : x might need to be double precison depending on if
+#         it is a time variable and what time is (time since
+#         or more recent where it shouldn't matter as much
+    x = np.float(x)   #might not need this?
+    eps = np.finfo(float).eps
+
     if abs(x) > 0.5:
-        e = np.float(x * coshm(x) - sinhm(x))
+        e = np.float(x) * coshm(x) - sinhm(x))
     else:
-        p = np.float(x ** 3 / 3)
-        e = np.float(p)
+        p = np.float(x) ** 3 / 3
+        e = p
         xx = x * x
         for i in range(2, 16):
             i2 = i * 2
             p = p * xx / (i2 * (i2 + 1))
             e = e + i * p
-            if abs(p) <= abs(e * np.finfo(float).eps):
+            if abs(p) <= abs(e * eps):
                 break
-    return np.float(e)
+
+    return e
 
 
 def enbase_t(tspan, hspan):
@@ -139,13 +155,17 @@ def enbase_t(tspan, hspan):
 # If the hspan vanishes, return a nominal unit energy.
 # The energy is quadratic in hspan, which can therefore be of either sign,
 # but tspan must be strictly positive for a meaningful positive energy.
-    tspan = np.float(tspan)
-    hspan = np.float(hspan)
+
     if tspan < 0.0:
         raise ValueError("In enbase_t; tspan must be positive")
+
     if hspan == 0.0:
         return 1.0
-    return (hspan ** 2 / expmm(-tspan)) * 0.5
+
+    # Calculate
+    r = hspan**2 / expmm(-tspan) * 0.5
+
+    return r 
 
 
 def tbnewton(nh, m, hgts, hs, hgtp, p, q):
@@ -1265,13 +1285,17 @@ def best_uslalom(nh, mh, doru, hgts, hs, halfgate):
 def count_gates(nh, hgts):
 # Count the number of distinct "time gates" that can accommodate all the data
 # from the given profile. This gate count is mh.
+
     hgtp = hgts[0] - 1
     mh = 0
+
     for i in range(nh):
         if hgts[i] <= hgtp:
             continue
-# A new nominal time of observation:
+
+        # A new nominal time of observation aka increment the count of gates
         mh += 1
+        # Update the previous height to the current height
         hgtp = hgts[i]
     return mh
 
@@ -1424,14 +1448,17 @@ def count_routes(n, code): # count, FF):
     FF = False
     flag = True
     count = 0
-    while True:
-        next_route(n, code, mode, flag)
+    while count <= 1025: 
+        mode = [0] * n
+        mode, flag = next_route(n, code, mode, flag)
         if flag:
-            return
+            return count, FF  # NickE might be break
         count += 1
     FF = (count > ihu)
     if FF:
         print('In count_routes; number of routes exceeds allowance =', ihu)
+
+    return count, FF
 
 def list_routes(n, code):
 # Given the route code array, "code", list all the allowed combinations
@@ -1439,12 +1466,17 @@ def list_routes(n, code):
 # of slalom gates.
     print('List all route combinations of', n, 'allowed passage modes')
     flag = True
-    for i in range(ihu):
-        next_route(n, code, mode, flag)
+    for i in range(1, 1026):
+        mode = [0] * n
+        mode, flag = next_route(n, code, mode, flag)
         if flag:
             print('In list_routes; List of routes complete')
+            flag = False
             break
         print(i, mode)
+
+    if i > 1025:
+        print("i > ihu or 1025. List may not necessarily be complete")
 
 def next_route(n, code, mode, flag):
 # Given the combinatoric specification of sequentially-conditional
@@ -1462,37 +1494,43 @@ def next_route(n, code, mode, flag):
 # and the present gate's given route code is code=codes(i), the options
 # for choosing mode(i) are encoded in the options code, 
 # option = options(code,
-    options = [[0, 1, 2], [0, 1, 2], [0, 1, 2], [0, 0, 0], [1, 1, 1], [2, 2, 2]]
+ 
+    options = [
+        [0, 1, 2, 0, 1, 2, 0, 1, 2],
+        [0, 0, 0, 1, 1, 1, 2, 2, 2]
+    ]
     firstmode = [1, 1, 2]
 # arbitrarily set mode of previous gate passage to "descent"
     modeim = 1
     if flag:
         for i in range(n):
-            option = options[code[i]][modeim]
+            option = options[modeim][code[i]]
             mode[i] = firstmode[option]
             modeim = mode[i]
         flag = False
-        return
+        return mode, flag
 # Use the present route (array of "mode" elements), and the route code, 
 # to find the next allowed route, or return with the flag raised when 
 # no more allowed routes are to be found:
-    for i in range(n, 0, -1):
+    for i in range(n - 1, -1, -1):
         im = i - 1
-        if i > 1:
+        if i > 0:
             modeim = mode[im]
         else:
             modeim = 1
-        option = options[code[i-1]][modeim]
-        if option > 0 or mode[i-1] == 2:
+        option = options[code[i]][modeim]
+        if option > 0 or mode[i] == 2:
             continue
-        mode[i-1] = 2
-        modejm = mode[i-1]
-        for j in range(i+1, n+1):
-            option = options[code[j-1]][modejm]
-            mode[j-1] = firstmode[option]
-            modejm = mode[j-1]
-        return
+        mode[i] = 2
+        modejm = mode[i]
+        for j in range(i+1, n):
+            option = options[code[j]][modejm]
+            mode[j] = firstmode[option]
+            modejm = mode[j]
+        return mode, flag
+
     flag = True
+    return mode, flag
 
 def slalom_tspline(n, bend, hgxn, yn, off, bigX, q, ya, en, ita, maxitb, ittot, FF):
 # NickE some are inout so I have to edit the line above
@@ -1775,111 +1813,103 @@ def convertd(n, tdata, hdata, phof): #, doru, idx, hgts, hs, descending, FF):
 # hgts of halfgate that correspond to the mid-time of each bin. (The two
 # limits of each time-bin are odd integers in halfgate units.)
     hour = 3600
-    h = np.zeros(n)
-    hgts = np.zeros(n)
     FF = False
+
     if len(hdata) != n:
         raise ValueError('In convertd; inconsistent dimensions of hdata')
     if len(tdata) != n:
         raise ValueError('In convertd; inconsistent dimensions of tdata')
-    if len(hs) != n:
-        raise ValueError('In convertd; inconsistent dimensions of hs')
-    if len(hgts) != n:
-        raise ValueError('In convertd; inconsistent dimensions of hgts')
-    hs = hdata
-# convert to whole number of seconds rounded to the nearest gate=2*halfgate:
+
+    hs = hdata[:]
+
+    # convert to whole number of seconds rounded to the nearest gate=2*halfgate:
     upsign = 0
     gate = halfgate * 2
+    hgts = np.array([2 * np.round(tdata[i] * hour / gate) for i in range(n)], dtype=int)
+
     for i in range(n):
-        hgts[i] = 2 * round(tdata[i] * hour / gate)
         if phof[i] == 5:
             upsign = 1 # ascending
         if phof[i] == 6:
             upsign = -1 # descending
-    doru = 0
+
     if upsign > 0:
         doru = 2
     else:
         doru = 1
+
     if n == 1:
-        return
+        return doru, np.array([1]), hgts, hs, False, FF
+
     if hgts[0] > hgts[n - 1]: # Reverse order
-        for i in range(n // 2):
-            j = n - i - 1
-            hgs = hgts[i] # Swap integer hgts
-            hgts[i] = hgts[j] # Swap integer hgts
-            hgts[j] = hgs # Swap integer hgts
-            s = hs[i] # swap real hs
-            hs[i] = hs[j]] # swap real hs
-            hs[j] = s] # swap real hs
+    if hgts[0] > hgts[-1]:
+        hgts = hgts[::-1] # swap integer heights
+        hs = hs[::-1] # swap real hs
+
+    descending = False
     if upsign == 1:
         descending = False
     elif upsign == -1:
         descending = True
     else:
-        descending = hs[n - 1] < hs[0]
+        descending = hs[-1] < hs[0]
         if descending:
             upsign = -1
             print('mainly DESCENDING')
         else:
             upsign = 1
             print('mainly ASCENDING')
+
     idx = list(range(1, n + 1))
-# make sure the order is in time increasing order
+    # make sure the order is in time increasing order
     for i in range(1, n):
         for ii in range(i):
-            if hgts[i] < hgts[ii] or (hgts[i] == hgts[ii] and upsign * (hs[i] - hs[ii])) < u0:
-                hgs = hgts[i] # Swap integer hgts
-                hgts[i] = hgts[ii] # Swap integer hgts
-                hgts[ii] = hgs # Swap integer hgts
-                s = hs[i] # swap real hs
-                hs[i] = hs[ii] # swap real hs
-                hs[ii] = s # swap real hs
-                j = idx[i] # swap index idx
-                idx[i] = idx[ii] # swap index idx
-                idx[ii] = j # swap index idx
+            if (hgts[i] < hgts[ii]) or (hgts[i] == hgts[ii] and upsign * (hs[i] - hs[ii]) < 0):
+                hgts[i], hgts[ii] = hgts[ii], hgts[i]
+                hs[i], hs[ii] = hs[ii], hs[i]
+                idx[i], idx[ii] = idx[ii], idx[i]
     for i in range(1, n):
         if hgts[i] < hgts[i - 1]:
             print('In convertd; time sequence not monotonic', i, hgts[i], hgts[i - 1])
             FF = True
             return doru, idx, hgts, hs, descending, FF
     for i in range(1, n):
-        if upsign * (hs[i] - hs[i - 1]) < u0:
+        if upsign * (hs[i] - hs[i - 1]) < 0:
             print('In convertd; height sequence not monotonic')
             FF = True
             return doru, idx, hgts, hs, descending, FF
 
+    FF = True
     return doru, idx, hgts, hs, descending, FF
 
 
-def convertd_back(n, ws, hgts, idx, descending): #halfgate, wdata, tdata
-#    if len(wdata) != n:
-#        raise ValueError('In convertd; inconsistent dimensions of wdata')
-#    if len(tdata) != n:
-#        raise ValueError('In convertd; inconsistent dimensions of tdata')
-    wdata = np.zeros(n)
-    tdata = np.zeros(n)
+def convertd_back(n, halfgate, wdata, tdata, ws, hgts, idx, descending):
+
     if len(ws) != n:
         raise ValueError('In convertd; inconsistent dimensions of ws')
     if len(hgts) != n:
         raise ValueError('In convertd; inconsistent dimensions of hgts')
-    wn = [0] * n
-    hgtn = [0] * n
+    if len(idx) != n:
+        raise ValueError('In convertd; inconsistent dimensions of idx')
+
+    wdata = np.zeros(n)
+    tdata = np.zeros(n)
+
+    # Reorder and assign values based on idx
     for i in range(n):
-        ii = idx[i]
-        hgtn[ii] = hgts[i]
-        wn[ii] = ws[i]
-    wdata = wn
-    tdata = hgtn * halfgate
+        ii = idx[i] - 1
+        wdata[ii] = ws[i]
+        tdata[ii] = hgts[i] * halfgate
+
+    # If descending or n is 1, no need to reverse
     if descending or n == 1:
-        return
+        return wdata, tdata
+
+    # Reverse the data 
     for i in range(n // 2):
-        j = n - i - 1
-        s = tdata[i]
-        tdata[i] = tdata[j]
-        tdata[j] = s
-        s = wdata[i]
-        wdata[i] = wdata[j]
-        wdata[j] = s
+        j = n - 1 - i
+        # Swap the data
+        tdata[i], tdata[j] = tdata[j], tdata[i]
+        wdata[i], wdata[j] = wdata[j], wdata[i]
 
     return wdata, tdata
