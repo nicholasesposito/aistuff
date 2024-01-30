@@ -293,7 +293,7 @@ def fit_gtspline(n, xs, ys, on):
             xa[m] = xs[i]
             ya[m] = ys[i]
 #NickE #####################
-    fit_tspline(m, xa[:m], ya[:m], qa[:m], ja[:m], en, FF)
+    qa, ja, en, FF = fit_tspline(m, xa[:m], ya[:m]) #, qa[:m], ja[:m], en, FF)
     if FF:
         print("In fit_gtspline; failure flag raised at call to fit_tspline")
         return q, j, yac, en, FF
@@ -306,7 +306,7 @@ def fit_gtspline(n, xs, ys, on):
             yac[i] = ys[i]
         else:
 #NickE   
-            eval_tsplined(m, xa[:m], ya[:m], qa[:m], xs[i], yac[i], q[i])
+            y, dydx = eval_tsplined(m, xa[:m], ya[:m], qa[:m], xs[i])
             j[i] = 0
 
     return q, j, yac, en, FF
@@ -371,7 +371,7 @@ def fit_tspline(n, xs, p):# , q, j, en, FF):
             FF = True
             print("In fit_tspline; xs data must increase strictly monotonically")
 # NickE what I return??????
-            return
+            return None, None, None, FF
 # Initialize tri-diagonal kernels for the energy definition:
 # qq = np.zeroes((n,2)) initialize symmetric tridiagonal, kernel for q^T*QQ*q
 #      where "q" are the dp/dx at each node.
@@ -385,6 +385,8 @@ def fit_tspline(n, xs, p):# , q, j, en, FF):
     cpp = np.zeros(n-1)
     cqp = np.zeros(n-1)
     sumq = np.zeros(n-1)
+    q = np.zeros(n)
+    j = np.zeros(n)
 # Loop over the intervals bounded by consecutive nodes:
     for i in range(n-1):
         ip = i + 1
@@ -416,8 +418,8 @@ def fit_tspline(n, xs, p):# , q, j, en, FF):
     q[1:n] = q[1:n] - cqp
 # The following 2 lines solve the tridiagonal system for q:
 #NickE these are called by pmat2. figure out the outputs.
-    ldltb(n, 1, qq)
-    ltdlbv(n, 1, qq, q)
+    qq = ldltb(n, 1, qq)
+    qq, q = ltdlbv(n, 1, qq, q)
 
     sumq[:] = q[:n-1] + q[1:n]
 
@@ -443,7 +445,7 @@ def fit_tspline(n, xs, p):# , q, j, en, FF):
     j[n-1] = q[n-1] - sb
 
 #NickE do I return something??
-
+    return q, j, en, False
 
 
 def int_tspline(n, xs, p, q):# , m):
