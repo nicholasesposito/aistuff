@@ -639,120 +639,87 @@ def eval_tspline(n, xs, p, q, x): # y
 # y using basis functions implied by the interval-end values of p and q
 # using the interval midpoint as local origin when x is interior, or the
 # single interval endpoint when it is exterior.
-    ia = 0
-    ib = 0
-    xr = 0
-    xh = 0
-    pm = 0
-    qm = 0
-    qah = 0
-    qbh = 0
-    qxh = 0
-    qdh = 0
-    shh = 0
-    chh = 0
-    sh = 0
-    ch = 0
-    xcmsh = 0
-    shm = 0
-    chm = 0
-    shhm = 0
-    chhm = 0
+    y = 0.0
+
     if x <= xs[0]:
         xr = x - xs[0]
-        y = p[0] + q[0] * np.exp(xr)
+        y = p[0] + q[0] * expm(xr)
         return y
     if x >= xs[n-1]:
         xr = x - xs[n-1]
-        y = p[n-1] - q[n-1] * np.exp(-xr)
+        y = p[n-1] - q[n-1] * expm(-xr)
         return y
     for ib in range(1, n):
-# only consider intervals of positive width
         if xs[ib] <= xs[ib-1]:
-# only consider intervals of positive width
+            # only consider intervals of positive width
             continue
         if xs[ib] >= x:
-# exit once finite interval straddling x is found
+            # exit once finite interval straddling x is found
             break
     ia = ib - 1
-    xh = (xs[ib] - xs[ia]) / 2 # halfwidth of interval
-    xr = x - xs[ia] - xh # x relative to interval midpoint
-    pm = (p[ib] + p[ia]) / 2 # average of end values
-    qm = (p[ib] - p[ia]) / (2 * xh) # average gradient
-    qah = q[ia] / 2
-    qbh = q[ib] / 2
-    qxh = qah + qbh - qm # Half the total excess q at interval ends
-    qdh = qbh - qah # Half the difference of q at interval ends
+    xh = (xs[ib] - xs[ia]) * 0.5  # halfwidth of interval
+    xr = x - xs[ia] - xh  # x relative to interval midpoint
+    pm = (p[ib] + p[ia]) * 0.5  # average of end values
+    qm = (p[ib] - p[ia]) / (2 * xh)  # average gradient
+    qah = q[ia] * 0.5
+    qbh = q[ib] * 0.5
+    qxh = qah + qbh - qm  # Half the total excess q at interval ends
+    qdh = qbh - qah  # Half the difference of q at interval ends
     shh = np.sinh(xh)
     chh = np.cosh(xh)
     sh = np.sinh(xr)
     ch = np.cosh(xr)
-    shm = np.sinh(xr) / 6
-    chm = np.cosh(xr) / 2
-    shhm = np.sinh(xh) / 6
-    chhm = np.cosh(xh) / 2
-    xcmsh = (xh ** 3) / 3
-    qdh = qdh / shh # rescale qdh, qxh
-    qxh = qxh / xcmsh # rescale qdh, qxh
+    shm = sinhm(xr)
+    chm = coshm(xr)
+    shhm = sinhm(xh)
+    chhm = coshm(xh)
+    xcmsh = xcms(xh)
+    qdh = qdh / shh  # rescale qdh, qxh
+    qxh = qxh / xcmsh  # rescale qdh, qxh
     y = pm + xr * qm + qdh * (chm - chhm) + qxh * (xh * shm - xr * shhm)
     return y
 
 def eval_tsplined(n, xs, p, q, x):
 # Like eval_tspline, but also return the derivative dy/dx
-    ia = 0
-    ib = 0
-    xr = 0
-    xh = 0
-    pm = 0
-    qm = 0
-    qah = 0
-    qbh = 0
-    qxh = 0
-    qdh = 0
-    shh = 0
-    chh = 0
-    sh = 0
-    ch = 0
-    xcmsh = 0
-    shm = 0
-    chm = 0
-    shhm = 0
-    chhm = 0
+    y = 0.0
+    dydx = 0.0
     if x <= xs[0]:
         xr = x - xs[0]
-        qemxr = q[0] * np.exp(xr)
+        qemxr = q[0] * expm(xr)
         y = p[0] + qemxr
         dydx = qemxr + q[0]
         return y, dydx
     if x >= xs[n-1]:
         xr = x - xs[n-1]
-        qemxr = q[n-1] * np.exp(-xr)
+        qemxr = q[n-1] * expm(-xr)
         y = p[n-1] - qemxr
         dydx = qemxr + q[n-1]
         return y, dydx
     for ib in range(1, n):
         if xs[ib] <= xs[ib-1]:
+            # Skip intervals of non-positive width
             continue
         if xs[ib] >= x:
+            # exit once finite interval straddling x is found 
             break
     ia = ib - 1
-    xh = (xs[ib] - xs[ia]) / 2
-    xr = x - xs[ia] - xh
-    pm = (p[ib] + p[ia]) / 2
+    xh = (xs[ib] - xs[ia]) * 0.5  # halfwidth of interval
+    xr = x - xs[ia] - xh  # x relative to interval midpoint
+    pm = (p[ib] + p[ia]) * 0.5
     qm = (p[ib] - p[ia]) / (2 * xh)
-    qah = q[ia] / 2
-    qbh = q[ib] / 2
-    qxh = qah + qbh - qm
-    qdh = qbh - qah
+    qah = q[ia] * 0.5
+    qbh = q[ib] * 0.5
+    qxh = qah + qbh - qm  # Half the total excess q at interval ends
+    qdh = qbh - qah  # Half the difference of q at interval ends
     shh = np.sinh(xh)
     chh = np.cosh(xh)
     sh = np.sinh(xr)
     ch = np.cosh(xr)
-    shm = np.sinh(xr) / 6
-    chm = np.cosh(xr) / 2
-    shhm = np.sinh(xh) / 6
-    chhm = np.cosh(xh) / 2
-    xcmsh = (xh ** 3) / 3
+    shm = sinhm(xr)
+    chm = coshm(xr)
+    shhm = sinhm(xh)
+    chhm = coshm(xh)
+    xcmsh = xcms(xh) 
     qdh = qdh / shh
     qxh = qxh / xcmsh
     y = pm + xr * qm + qdh * (chm - chhm) + qxh * (xh * shm - xr * shhm)
@@ -761,36 +728,20 @@ def eval_tsplined(n, xs, p, q, x):
 
 def eval_tsplinedd(n, xs, p, q, x):
 # Like eval_tspline, but also return the derivative dy/dx
-    ia = 0
-    ib = 0
-    xr = 0
-    xh = 0
-    pm = 0
-    qm = 0
-    qah = 0
-    qbh = 0
-    qxh = 0
-    qdh = 0
-    shh = 0
-    chh = 0
-    sh = 0
-    ch = 0
-    xcmsh = 0
-    shm = 0
-    chm = 0
-    shhm = 0
-    chhm = 0
-    qemxr = 0
+    y = 0.0
+    dydx = 0.0
+    ddyddx = 0.0
+
     if x <= xs[0]:
         xr = x - xs[0]
-        qemxr = q[0] * np.exp(xr)
+        qemxr = q[0] * expm(xr)
         y = p[0] + qemxr
         dydx = qemxr + q[0]
         ddydxx = dydx
         return y, dydx, ddydxx
     if x >= xs[n-1]:
         xr = x - xs[n-1]
-        qemxr = q[n-1] * np.exp(-xr)
+        qemxr = q[n-1] * expm(-xr)
         y = p[n-1] - qemxr
         dydx = qemxr + q[n-1]
         ddydxx = -dydx
@@ -801,23 +752,23 @@ def eval_tsplinedd(n, xs, p, q, x):
         if xs[ib] >= x:
             break
     ia = ib - 1
-    xh = (xs[ib] - xs[ia]) / 2
+    xh = (xs[ib] - xs[ia]) * 0.5 
     xr = x - xs[ia] - xh
-    pm = (p[ib] + p[ia]) / 2
+    pm = (p[ib] + p[ia]) * 0.5
     qm = (p[ib] - p[ia]) / (2 * xh)
-    qah = q[ia] / 2
-    qbh = q[ib] / 2
+    qah = q[ia] * 0.5
+    qbh = q[ib] * 0.5
     qxh = qah + qbh - qm
     qdh = qbh - qah
     shh = np.sinh(xh)
     chh = np.cosh(xh)
     sh = np.sinh(xr)
     ch = np.cosh(xr)
-    shm = np.sinh(xr) / 6
-    chm = np.cosh(xr) / 2
-    shhm = np.sinh(xh) / 6
-    chhm = np.cosh(xh) / 2
-    xcmsh = (xh ** 3) / 3
+    shm = sinhm(xr)
+    chm = coshm(xr)
+    shhm = sinhm(xh)
+    chhm = coshm(xh)
+    xcmsh = xcms(xh)
     qdh = qdh / shh
     qxh = qxh / xcmsh
     y = pm + xr * qm + qdh * (chm - chhm) + qxh * (xh * shm - xr * shhm)
@@ -827,29 +778,9 @@ def eval_tsplinedd(n, xs, p, q, x):
 
 def eval_tsplineddd(n, xs, p, q, x):
 # Like eval_tspline, but also return the derivative dy/dx
-    ia = 0
-    ib = 0
-    xr = 0
-    xh = 0
-    pm = 0
-    qm = 0
-    qah = 0
-    qbh = 0
-    qxh = 0
-    qdh = 0
-    shh = 0
-    chh = 0
-    sh = 0
-    ch = 0
-    xcmsh = 0
-    shm = 0
-    chm = 0
-    shhm = 0
-    chhm = 0
-    qemxr = 0
     if x <= xs[0]:
         xr = x - xs[0]
-        qemxr = q[0] * np.exp(xr)
+        qemxr = q[0] * expm(xr)
         y = p[0] + qemxr
         dydx = qemxr + q[0]
         ddydxx = dydx
@@ -857,7 +788,7 @@ def eval_tsplineddd(n, xs, p, q, x):
         return y, dydx, ddydxx, dddydxxx
     if x >= xs[n-1]:
         xr = x - xs[n-1]
-        qemxr = q[n-1] * np.exp(-xr)
+        qemxr = q[n-1] * expm(-xr)
         y = p[n-1] - qemxr
         dydx = qemxr + q[n-1]
         ddydxx = -dydx
@@ -869,23 +800,23 @@ def eval_tsplineddd(n, xs, p, q, x):
         if xs[ib] >= x:
             break
     ia = ib - 1
-    xh = (xs[ib] - xs[ia]) / 2
+    xh = (xs[ib] - xs[ia]) * 0.5
     xr = x - xs[ia] - xh
-    pm = (p[ib] + p[ia]) / 2
+    pm = (p[ib] + p[ia]) * 0.5 
     qm = (p[ib] - p[ia]) / (2 * xh)
-    qah = q[ia] / 2
-    qbh = q[ib] / 2
+    qah = q[ia] * 0.5
+    qbh = q[ib] * 0.5
     qxh = qah + qbh - qm
     qdh = qbh - qah
     shh = np.sinh(xh)
     chh = np.cosh(xh)
     sh = np.sinh(xr)
     ch = np.cosh(xr)
-    shm = np.sinh(xr) / 6
-    chm = np.cosh(xr) / 2
-    shhm = np.sinh(xh) / 6
-    chhm = np.cosh(xh) / 2
-    xcmsh = (xh ** 3) / 3
+    shm = sinhm(xr)
+    chm = coshm(xr)
+    shhm = sinhm(xh)
+    chhm = coshm(xh)
+    xcmsh = xcms(xh)
     qdh = qdh / shh
     qxh = qxh / xcmsh
     y = pm + xr * qm + qdh * (chm - chhm) + qxh * (xh * shm - xr * shhm)
@@ -1411,18 +1342,32 @@ def set_posts(mh, mode, hgtn, hn): # , bend, hgtp, hp, off):
 # particular route, are redundant owing to existence of duplication of 
 # consecutive pairs of (hgtp,hp) sometimes occurring when no intermission
 # separates consecutive gates. All times are in integer units of halfgate.
-    off = False
+
+    # Initialize output arrays
+    bend = np.zeros(mh*2, dtype=int)
+    hgtp = np.zeros(mh*2, dtype=int)
+    hp = np.zeros(mh*2)
+    off = np.zeros(mh*2, dtype=bool)
+
+    # Initial values for previous gatepost and height
+    hprev = 0.0
+    hgtprev = 0
+
+#    off = False
     for i in range(mh):
         im = i - 1
         modei = mode[i]
         i2 = i * 2
         i2m = i2 - 1
         i2mm = i2 - 2
-        hgtp[i2m] = hgtn[0][i]
-        hgtp[i2] = hgtn[1][i]
-        hp[i2m] = hn[0][modei][i]
-        hp[i2] = hn[1][modei][i]
-        if i > 1:
+##### stopped here.
+        hgtp[i2m] = hgtn[0][i]  #NickE if these don't work, use hgtn[0,i] for this 
+        hgtp[i2] = hgtn[1][i]   # this too
+        hp[i2m] = hn[0][modei][i]  # this too
+        hp[i2] = hn[1][modei][i]   # this too
+        # Check whether gatepost duplications exist, or one dominates 
+        # another at same t
+        if i > 0:
             if hgtprev == hgtp[i2m]:
                 if hprev == hp[i2m]:
                     off[i2m] = True
@@ -1440,6 +1385,8 @@ def set_posts(mh, mode, hgtn, hn): # , bend, hgtp, hp, off):
         bend[i2] = -bend[i2m]
         hgtprev = hgtp[i2]
         hprev = hp[i2]
+
+    return bend, hgtp, hp, off
 
 def count_routes(n, code): # count, FF):
 # Given the route code array, "code", list all the allowed combinations
