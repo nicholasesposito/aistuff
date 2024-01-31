@@ -235,16 +235,9 @@ def ubnewton(nh, m, hgts, hs, hgtp, p, q):
     halfgate = np.float(30.0)
     nit = int(12)
 
-    nh = int(nh)
-    m = int(m)
-    hgts = np.float(hgts)
-    hs = np.float(hs)
-    hgtp = np.float(hgtp)
-    p = np.float(p)
-    q = np.float(q)
-
     gate = 2 * halfgate
-    tr = hgtp * halfgate
+#    tr = hgtp * halfgate
+    tr = [h * halfgate for h in hgtp]
     for i in range(nh):
         tee = hgts[i] * halfgate
         he = hs[i]
@@ -252,7 +245,8 @@ def ubnewton(nh, m, hgts, hs, hgtp, p, q):
 #  height is he
         it = 1
         while it <= nit:
-            eval_uspline(m, tr, p, q, tee, hac, dhadt)  #NickE CHECK
+            hac, dhadt = eval_uspline(m, tr, p, q, tee) #, hac, dhadt)  eval_uspline does not return dhadt....
+# NickE gotta fiture this out
             if it == 1:
                 dhdt[i] = dhadt
             if dhadt == 0:
@@ -613,13 +607,13 @@ def int_uspline(n, xs, p, q): # m
     e = 0
     for i in range(n-1):
         ip = i + 1
-        x = (xs[ip] - xs[i]) / 2
-        t2 = x ** 2 / 2
+        x = (xs[ip] - xs[i]) * 0.5
+        t2 = x ** 2 * 0.5
         t3 = t2 * x / 3
         t4 = t3 * x / 4
-        pa = (p[ip] + p[i]) / 2
+        pa = (p[ip] + p[i]) * 0.5
         pd = (p[ip] - p[i]) / (2 * x)
-        qa = (q[ip] + q[i]) / 2
+        qa = (q[ip] + q[i]) * 0.5
         qd = (q[ip] - q[i]) / (2 * x)
 # a,b,c,d are the Taylor coefficients of the cubic about the interval midpoint
         c = qd
@@ -863,12 +857,12 @@ def eval_itspline(n, xs, p, q, m, x):
             break
     ia = ib - 1
 #NickE something wrong with all below this
-    xh = (xs[ib] - xs[ia]) / 2 #  halfwidth of interval
+    xh = (xs[ib] - xs[ia]) * 0.5 #  halfwidth of interval
     xr = x - xs[ia] - xh
-    pm = (p[ib] + p[ia]) / 2
+    pm = (p[ib] + p[ia]) * 0.5
     qm = (p[ib] - p[ia]) / (2 * xh)
-    qah = q[ia] / 2
-    qbh = q[ib] / 2
+    qah = q[ia] * 0.5
+    qbh = q[ib] * 0.5
     qxh = qah + qbh - qm
     qdh = qbh - qah
     shh = xh
@@ -876,9 +870,9 @@ def eval_itspline(n, xs, p, q, m, x):
     sh = xr
     ch = 1
     shm = xr ** 3 / 6
-    chm = xr ** 2 / 2
+    chm = xr ** 2 * 0.5
     shhm = xh ** 3 / 6
-    chhm = xh ** 2 / 2
+    chhm = xh ** 2 * 0.5
     xcmsh = xh ** 3 / 3
     qdh = qdh / shh
     qxh = qxh / xcmsh
@@ -893,45 +887,31 @@ def eval_uspline(n, xs, p, q, x):
 # y using basis functions implied by the interval-end values of p and q
 # using the interval midpoint as local origin when x is interior, or the
 # single interval endpoint when it is exterior.
-    ia = 0
-    ib = 0
-    xr = 0
-    xh = 0
-    pm = 0
-    qm = 0
-    qah = 0
-    qbh = 0
-    qxh = 0
-    qdh = 0
-    shh = 0
-    chh = 0
-    sh = 0
-    ch = 0
-    xcmsh = 0
-    shm = 0
-    chm = 0
-    shhm = 0
-    chhm = 0
+
     if x <= xs[0]:
         xr = x - xs[0]
         y = p[0] + q[0] * xr
         return y
+
     if x >= xs[n-1]:
         xr = x - xs[n-1]
         y = p[n-1] + q[n-1] * xr
         return y
+
+    # Find the interval containing x
     for ib in range(1, n):
         if xs[ib] <= xs[ib-1]:
             continue
         if xs[ib] >= x:
             break
+
     ia = ib - 1
-    xh = (xs[ib] - xs[ia]) / 2 # halfwidth of interval
+    xh = (xs[ib] - xs[ia]) * 0.5 # halfwidth of interval
     xr = x - xs[ia] - xh # x relative to interval midpoint
-    pm = (p[ib] + p[ia]) / 2 # average of end values
+    pm = (p[ib] + p[ia]) * 0.5 # average of end values
     qm = (p[ib] - p[ia]) / (2 * xh) # average gradient
-    qah = q[ia] / 2
-    qbh = q[ib] / 2
+    qah = q[ia] * 0.5
+    qbh = q[ib] * 0.5
     qxh = qah + qbh - qm # Half the total excess q at interval ends
     qdh = qbh - qah # Half the difference of q at interval ends
     shh = xh
@@ -940,38 +920,44 @@ def eval_uspline(n, xs, p, q, x):
     ch = 1
     xcmsh = xh ** 3 / 3
     shm = xr ** 3 / 6
-    chm = xr ** 2 / 2
+    chm = xr ** 2 * 0.5
     shhm = xh ** 3 / 6
-    chhm = xh ** 2 / 2
+    chhm = xh ** 2 * 0.5
     qdh = qdh / shh # rescale
     qxh = qxh / xcmsh # rescale
     y = pm + xr * qm + qdh * (chm - chhm) + qxh * (xh * shm - xr * shhm)
+
     return y
+
 
 def eval_usplined(n, xs, p, q, x):
 # Like eval_uspline, but also return the derivative dy/dx
+
     if x <= xs[0]:
         xr = x - xs[0]
         y = p[0] + q[0] * xr
         dydx = q[0]
         return y, dydx
+
     if x >= xs[n-1]:
         xr = x - xs[n-1]
         y = p[n-1] + q[n-1] * xr
         dydx = q[n-1]
         return y, dydx
+
     for ib in range(1, n):
         if xs[ib] <= xs[ib-1]:
             continue
         if xs[ib] >= x:
             break
+
     ia = ib - 1
-    xh = (xs[ib] - xs[ia]) / 2
+    xh = (xs[ib] - xs[ia]) * 0.5 
     xr = x - xs[ia] - xh
-    pm = (p[ia] + p[ib]) / 2
+    pm = (p[ia] + p[ib]) * 0.5
     qm = (p[ib] - p[ia]) / (xh * 2)
-    qah = q[ia] / 2
-    qbh = q[ib] / 2
+    qah = q[ia] * 0.5
+    qbh = q[ib] * 0.5
     qxh = qah + qbh - qm
     qdh = qbh - qah
     shh = xh
@@ -979,42 +965,48 @@ def eval_usplined(n, xs, p, q, x):
     sh = xr
     ch = 1
     shm = xr**3 / 6
-    chm = xr**2 / 2
+    chm = xr**2 * 0.5
     shhm = xh**3 / 6
-    chhm = xh**2 / 2
+    chhm = xh**2 * 0.5
     xcmsh = xh**3 / 3
     qdh = qdh / shh
     qxh = qxh / xcmsh
     y = pm + xr * qm + qdh * (chm - chhm) + qxh * (xh * shm - xr * shhm)
     dydx = qm + qdh * sh + qxh * (xh * chm - shhm)
+
     return y, dydx
+
 
 def eval_usplinedd(n, xs, p, q, x):
 # Like eval_uspline, but also return the derivative dy/dx
+
     if x <= xs[0]:
         xr = x - xs[0]
         y = p[0] + q[0] * xr
         dydx = q[0]
         ddydxx = 0
         return y, dydx, ddydxx
+
     if x >= xs[n-1]:
         xr = x - xs[n-1]
         y = p[n-1] + q[n-1] * xr
         dydx = q[n-1]
         ddydxx = 0
         return y, dydx, ddydxx
+
     for ib in range(1, n):
         if xs[ib] <= xs[ib-1]:
             continue
         if xs[ib] >= x:
             break
+
     ia = ib - 1
-    xh = (xs[ib] - xs[ia]) / 2
+    xh = (xs[ib] - xs[ia]) * 0.5
     xr = x - xs[ia] - xh
-    pm = (p[ia] + p[ib]) / 2
+    pm = (p[ia] + p[ib]) * 0.5
     qm = (p[ib] - p[ia]) / (xh * 2)
-    qah = q[ia] / 2
-    qbh = q[ib] / 2
+    qah = q[ia] * 0.5
+    qbh = q[ib] * 0.5
     qxh = qah + qbh - qm
     qdh = qbh - qah
     shh = xh
@@ -1022,19 +1014,22 @@ def eval_usplinedd(n, xs, p, q, x):
     sh = xr
     ch = 1
     shm = xr**3 / 6
-    chm = xr**2 / 2
+    chm = xr**2 * 0.5
     shhm = xh**3 / 6
-    chhm = xh**2 / 2
+    chhm = xh**2 * 0.5
     xcmsh = xh**3 / 3
     qdh = qdh / shh
     qxh = qxh / xcmsh
     y = pm + xr * qm + qdh * (chm - chhm) + qxh * (xh * shm - xr * shhm)
     dydx = qm + qdh * sh + qxh * (xh * chm - shhm)
     ddydxx = qdh + qxh * xh * sh
+
     return y, dydx, ddydxx
+
 
 def eval_usplineddd(n, xs, p, q, x):
 # Like eval_uspline, but also return the derivative dy/dx
+
     if x <= xs[0]:
         xr = x - xs[0]
         y = p[0] + q[0] * xr
@@ -1042,6 +1037,7 @@ def eval_usplineddd(n, xs, p, q, x):
         ddydxx = 0
         dddydxxx = 0
         return y, dydx, ddydxx, dddydxxx
+
     if x >= xs[n-1]:
         xr = x - xs[n-1]
         y = p[n-1] + q[n-1] * xr
@@ -1049,18 +1045,20 @@ def eval_usplineddd(n, xs, p, q, x):
         ddydxx = 0
         dddydxxx = 0
         return y, dydx, ddydxx, dddydxxx
+
     for ib in range(1, n):
         if xs[ib] <= xs[ib-1]:
             continue
         if xs[ib] >= x:
             break
+
     ia = ib - 1
-    xh = (xs[ib] - xs[ia]) / 2
+    xh = (xs[ib] - xs[ia]) * 0.5
     xr = x - xs[ia] - xh
-    pm = (p[ia] + p[ib]) / 2
+    pm = (p[ia] + p[ib]) * 0.5
     qm = (p[ib] - p[ia]) / (xh * 2)
-    qah = q[ia] / 2
-    qbh = q[ib] / 2
+    qah = q[ia] * 0.5
+    qbh = q[ib] * 0.5
     qxh = qah + qbh - qm
     qdh = qbh - qah
     shh = xh
@@ -1069,9 +1067,9 @@ def eval_usplineddd(n, xs, p, q, x):
     ch = 1
 # NickE I think also issues here
     shm = xr**3 / 6
-    chm = xr**2 / 2
+    chm = xr**2 * 0.5
     shhm = xh**3 / 6
-    chhm = xh**2 / 2
+    chhm = xh**2 * 0.5
     xcmsh = xh**3 / 3
     qdh = qdh / shh
     qxh = qxh / xcmsh
@@ -1079,17 +1077,19 @@ def eval_usplineddd(n, xs, p, q, x):
     dydx = qm + qdh * sh + qxh * (xh * chm - shhm)
     ddydxx = qdh + qxh * xh * sh
     dddydxxx = qxh * xh
+
     return y, dydx, ddydxx, dddydxxx
+
 
 def eval_iuspline(n, xs, p, q, m, x):
 # valuate the integrated untensioned spline at x, returning the value, y.
     if x <= xs[0]:
         xr = x - xs[0]
-        y = p[0] * xr + q[0] * xr**2 / 2
+        y = p[0] * xr + q[0] * xr**2 * 0.5
         return y
     if x >= xs[n-1]:
         xr = x - xs[n-1]
-        y = m[n-1] + p[n-1] * xr + q[n-1] * xr**2 / 2
+        y = m[n-1] + p[n-1] * xr + q[n-1] * xr**2 * 0.5
         return y
     for ib in range(1, n):
         if xs[ib] <= xs[ib-1]:
@@ -1097,20 +1097,20 @@ def eval_iuspline(n, xs, p, q, m, x):
         if xs[ib] >= x:
             break
     ia = ib - 1
-    xh = (xs[ib] - xs[ia]) / 2
+    xh = (xs[ib] - xs[ia]) * 0.5
     xr = x - xs[ia] - xh
-    t2 = xh**2 / 2
+    t2 = xh**2 * 0.5
     t3 = t2 * xh / 3
-    pa = (p[ib] + p[ia]) / 2
+    pa = (p[ib] + p[ia]) * 0.5
     pd = (p[ib] - p[ia]) / xh
-    qa = (q[ib] + q[ia]) / 2
+    qa = (q[ib] + q[ia]) * 0.5
     qd = (q[ib] - q[ia]) / xh
 # a,b,c,d are the Taylor coefficients of the cubic about the interval midpoint
     c = qd
     a = pa - c * t2
     d = (qa - pd) * 3/2 / t2
     b = qa - d * t2
-    t2 = xr**2 / 2
+    t2 = xr**2 * 0.5
     t3 = t2 * xr / 3
     t4 = t3 * xr / 4
     y = m[ia] + a * xr + b * t2 + c * t3 + d * t4
@@ -1918,6 +1918,7 @@ def convertd(n, tdata, hdata, phof): #, doru, idx, hgts, hs, descending, FF):
             return doru, idx, hgts, hs, descending, FF
 
     FF = True
+
     return doru, idx, hgts, hs, descending, FF
 
 
@@ -1945,7 +1946,7 @@ def convertd_back(n, wdata, tdata, ws, hgts, idx, descending):
         return wdata, tdata
 
     # Reverse the data 
-    for i in range(n // 2):
+    for i in range(n /* 0.5):
         j = n - 1 - i
         # Swap the data
         tdata[i], tdata[j] = tdata[j], tdata[i]
