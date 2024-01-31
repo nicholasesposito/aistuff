@@ -119,9 +119,9 @@ def sinhm(x):
 def coshmm(x):
 # cosh(x)-1-x^2/2  (approximately x**4/24 for small x)
 # =I^(4)cosh(x), where I^(p) is the integral iterated p times
-    x = np.float(x)
     xh = x * 0.5
-    return sinhm(xh) * (2 * np.sinh(xh) + x)
+    c = sinhm(xh) * (2 * np.sinh(xh) + x)
+    return c 
 
 
 def xcms(x):
@@ -186,26 +186,26 @@ def tbnewton(nh, m, hgts, hs, hgtp, p, q):
 # at this i. (The vertical motion in such cases is essentially negligible
 # in any case, and very likely is multivalued as the trajectory wavers about
 # this gate's value of hs(i).)
+    halfgate = np.float(30.0)
+    heps = np.float(0.01)
+    bigT = np.float(120.0)
     nit = int(12)
 
-    nh = int(nh)
-    m = int(m)
-    hgts = np.float(hgts)
-    hs = np.float(hs)
-    hgtp = np.float(hgtp)
-    p = np.float(p) 
-    q = np.float(q) 
     gate = 2 * halfgate / bigT
-    tr = hgtp * halfgate / bigT
+    tr = [x * halfgate / bigT for x in hgtp]
+    dhdt = [0.0] * nh
+    te = [0.0] * nh
+    FF = False
+
     for i in range(nh):
         tee = hgts[i] * halfgate / bigT
         he = hs[i]
 #  Use Newton iterations to estimate the rescaled time, tee, at which the 
 #  height is he
         it = 1
-        while it <= 12:
+        while it <= nit:
 # NickE
-            eval_tspline(m, tr, p, q, tee, hac, dhadt)
+            hac, dhadt = eval_tspline(m, tr, p, q, tee)
             if it == 1:
                 dhdt[i] = dhadt / bigT
             if dhadt == 0:
@@ -220,7 +220,7 @@ def tbnewton(nh, m, hgts, hs, hgtp, p, q):
                 break
             tee = tee + dt
             it = it + 1
-        FF = it > 12
+        FF = it > nit
         if FF:
             print("In tbnewton; Newton iterations seem not to be converging \\
                    at i=", i)
@@ -232,6 +232,7 @@ def tbnewton(nh, m, hgts, hs, hgtp, p, q):
 
 def ubnewton(nh, m, hgts, hs, hgtp, p, q):
 #  Like tbnewton, but for the case of untensioned (i.e., cubic) splines
+    halfgate = np.float(30.0)
     nit = int(12)
 
     nh = int(nh)
@@ -283,10 +284,7 @@ def fit_gtspline(n, xs, ys, on):
 # duplication with the given ys. In other respects, this is just
 # like fit_tspline.
     m = 0
-    xa = np.zeros(n)
-    ya = np.zeros(n)
-    qa = np.zeros(n)
-    ja = np.zeros(n)
+    xa, ya, qa, ja = []
     for i in range(n):
         if on[i]:
             m = m + 1
@@ -306,7 +304,7 @@ def fit_gtspline(n, xs, ys, on):
             yac[i] = ys[i]
         else:
 #NickE   
-            y, dydx = eval_tsplined(m, xa[:m], ya[:m], qa[:m], xs[i])
+            yac[i], q[i] = eval_tsplined(m, xa[:m], ya[:m], qa[:m], xs[i])
             j[i] = 0
 
     return q, j, yac, en, FF
@@ -453,7 +451,7 @@ def int_tspline(n, xs, p, q):# , m):
 # and return the values of its integral at the n-1 interval midpoints, and
 # the value at the last node, assuming that the integral at the first node
 # is set to zero.
-    m[0] = 0
+    m = np.zeros(n)
 # e is the running integral as we loop over successive nodes, so it starts 
 # out zero at the first node:
     e = 0
@@ -482,7 +480,7 @@ def int_tspline(n, xs, p, q):# , m):
         e = e + 2 * (a * x + c * shmx)
     m[n-1] = e
 
-# NickE    return m probably
+    return m
 
 def fit_guspline(n, xs, ys, on): #, q, j, yac, en, FF):
 # Fit the gappy untensioned spline, where only those nodes flagged "on"
@@ -1118,102 +1116,140 @@ def eval_iuspline(n, xs, p, q, m, x):
     y = m[ia] + a * xr + b * t2 + c * t3 + d * t4
     return y
 
-def best_tslalom(nh, mh, doru, hgts, hs, halfgate, bigT):
+def best_tslalom(nh, mh, doru, hgts, hs):
 # Run through the different allowed routes between the slalom gates and
 # select as the final solution the one whose spline has the smallest "energy".
-# NickE major issues with things missing or coming from nowhere
-    m = mh * 2
-    hgtp = 0
-    hgtn = [[0] * mh for _ in range(2)]
-    hn = [[[0] * mh for _ in range(2)] for _ in range(2)] #NickE WHAT
-    code = [0] * mh
-    mode = [0] * mh
-    bend = [0] * (mh * 2)
-    off = [False] * (mh * 2)
+
+    # Initialize output variables
+    halfgate = np.float(30)
+    bigT = np.float(120.0)
+
+    hgtp = np.zeros(mh*2, dtype=int)
+    hp = np.zeros(mh*2)
+    qbest = np.zeros(mh*2)
+    yabest = np.zeros(mh*2)
+    enbest = None
+    modebest = np.zeros(mh, dtype=int)
+    maxita = maxitb = maxit = maxrts = 0
     FF = False
+
+    # Internal variables
+    m = mh*2
+
 # Examine gate posts of first and last slalom gate to determine whether
 # profile is predominantly descending or ascending:
-# NickE call
-    set_gates(nh, mh, doru, hgts, hs, hgtn, hn, code, FF)
+    hgtn, hn, code, FF = set_gates(nh, mh, doru, hgts, hs) 
+    descending = False
+    if hn[0][1][0] > hn[0][0][mh-1]:
+        descending = True
+    elif hn[1][1][0] < hn[1][0][mh-1]:
+        descending = False
+    else:
+        descending = (doru == 1)
+    
+    hgbigT = bigT / halfgate
+    tspan = (hgtn[1][mh-1] - hgtn[0][0]) / hgbigT
+    if descending:
+        hspan = (hn[0][0][0] - hn[0][1][mh-1])
+    else:
+        hspan = (hn[1][1][mh-1] - hn[1][0][0])
+    
+    enbase = enbase_t(tspan, hspan)
+
     if FF:
         print('In best_tslalom; failure flag was raised in call to set_gates')
-        return
-# NickE call
-    count_routes(mh, code, route_count, FF)
+        return  # NickE return
+    route_count, FF = count_routes(mh, code) #, route_count, FF)
     maxrts = max(maxrts, route_count)
+
     if FF:
         print('In best_tslalom; failure flag raised in call to count_routes')
-        return
+        return hgtp, hp, qbest, yabest, enbest, modebest, maxita, maxitb, maxit, maxrts, FF 
+
     if route_count > 4:
-#NickE call
         list_routes(mh, code)
-    enbest = float('inf')
+    enbest = float('inf') ### NickE change to float_max * 0.5 i think
     flag = True
-    for k in range(1, i+1):
-#NickE call
-        next_route(mh, code, mode, flag)
+
+    for k in range(1, 1026): # 1026 is from ihu (=1025) + 1
+        mode, flag = next_route(mh, code, mode, flag)
         if flag:
             flag = False
             break
-#NickE multiple calls
-        set_posts(mh, mode, hgtn, hn, bend, hgtp, hp, off)
-        slalom_tspline(m, bend, hgtp, hp, off, bigT, q, ya, en, ita, maxitb,
-                       ittot, FF)
+        bend, hgtp, hp, off = set_posts(mh, mode, hgtn, hn) 
+        q, ya, en, ita, ittot, maxitb, FF = slalom_tspline(m, bend, hgtp, hp, off) 
         en = en / enbase_t(tspan, hspan)
         maxita = max(maxita, ita)
         maxit = max(maxit, ittot)
+
         if FF:
             print('In best_tslalom; failure flag in call to slalom_tspline')
-            return
+            return hgtp, hp, qbest, yabest, enbest, modebest, maxita, maxitb, maxit, maxrts, FF
+
         if en < enbest:
             modebest = mode
             enbest = en
             qbest = q
             yabest = ya
 
-def best_uslalom(nh, mh, doru, hgts, hs, halfgate):
+    return hgtp, hp, qbest, yabest, enbest, modebest, maxita, maxitb, maxit, maxrts, FF
+
+def best_uslalom(nh, mh, doru, hgts, hs):
 # Like best_tslalom, except this treats the special limiting case where the
 # spline tension vanishes
-# NickE going to assume more major issues
-    hgtp = 0
-    hgtn = [[0] * mh for _ in range(2)]
-    hn = [[[0] * mh for _ in range(2)] for _ in range(2)]
-    code = [0] * mh
-    mode = [0] * mh
-    bend = [0] * (mh * 2)
-    off = [False] * (mh * 2)
+    hgtp = np.zeros(mh*2, dtype=int)
+    hp = np.zeros(mh*2)
+    qbest = np.zeros(mh*2)
+    yabest = np.zeros(mh*2)
+    enbest = float('inf')  # Initialize to infinity for comparison
+    modebest = np.zeros(mh, dtype=int)
+    maxita = maxitb = maxit = maxrts = 0
     FF = False
-    set_gates(nh, mh, doru, hgts, hs, hgtn, hn, code, FF)
+    
+    # Additional variables used within the subroutine
+    halfgate = np.float(30.0)
+    m = mh*2
+    q = np.zeros(mh*2)
+    ya = np.zeros(mh*2)
+    flag = True
+    
+    hgtn, hn, code, FF = set_gates(nh, mh, doru, hgts, hs) #, hgtn, hn, code, FF)
     if FF:
         print('In best_uslalom; failure flag was raised in call to set_gates')
-        return
-    count_routes(mh, code, route_count, FF)
+        return hgtp, hp, qbest, yabest, enbest, modebest, maxita, maxitb, maxit, maxrts, FF
+
+    route_count, FF = count_routes(mh, code) #, route_count, FF)
     maxrts = max(maxrts, route_count)
     if FF:
         print('In best_uslalom; failure flag raised in call to count_routes')
-        return
+        return hgtp, hp, qbest, yabest, enbest, modebest, maxita, maxitb, maxit, maxrts, FF
+
     if route_count > 4:
         list_routes(mh, code)
-    enbest = float('inf')
+    enbest = float('inf') #NickE max_float * 0.5again
     flag = True
-    for k in range(1, i+1):
-        next_route(mh, code, mode, flag)
+
+    for k in range(1, 1026): # ihu = 1025 + 1 = 1026
+        mode, flag = next_route(mh, code)
         if flag:
             flag = False
             break
-        set_posts(mh, mode, hgtn, hn, bend, hgtp, hp, off)
-        slalom_uspline(m, bend, hgtp, hp, off, halfgate, q, ya, en, ita, 
-                       maxitb, ittot, FF)
+
+        bend, hgtp, hp, off = set_posts(mh, mode, hgtn, hn)
+        q, ya, en, ita, ittot, maxitb, FF = slalom_uspline(m, bend, hgtp, hp, off)
+
         maxita = max(maxita, ita)
         maxit = max(maxit, ittot)
         if FF:
             print('best_uslalom; failure flag raised in call to slalom_uspline')
-            return
+            return hgtp, hp, qbest, yabest, enbest, modebest, maxita, maxitb, maxit, maxrts, FF
         if en < enbest:
             modebest = mode
             enbest = en
             qbest = q
             yabest = ya
+
+    return hgtp, hp, qbest, yabest, enbest, modebest, maxita, maxitb, maxit, maxrts, FF
 
 def count_gates(nh, hgts):
 # Count the number of distinct "time gates" that can accommodate all the data
@@ -1302,10 +1338,15 @@ def set_gates(nh, mh, doru, hgts, hs): #, hgtn, hn, code, FF):
 # doru=2 ==> ascending
 
 #NickE this missed a lot. smh fml 
+    hgtn = np.zeros((2, mh), dtype=int)
+    hn = np.zeros((2,2,mh))
+    code = np.zeros(np, dtype=int)
     FF = False
     n = nh * 2
+
     hgtp = hgts[0] - 1
     imh = 0
+
     for i in range(nh):
         i2 = i * 2
         i2m = i2 - 1
@@ -1319,7 +1360,7 @@ def set_gates(nh, mh, doru, hgts, hs): #, hgtn, hn, code, FF):
         elif hgts[i] < hgtp:
             FF = True
             print('In set_gates; data are not temporally monotonic')
-            return
+            return hgtn, hn, code, FF
         else:
             hn[0][0][imh-1] = max(hn[0][0][imh-1], hp)
             hn[0][1][imh-1] = min(hn[0][1][imh-1], hp)
@@ -1331,7 +1372,49 @@ def set_gates(nh, mh, doru, hgts, hs): #, hgtn, hn, code, FF):
         raise ValueError('In set_gates; inconsistent gate tallies, imh and mh')
     if mh == 1:
         code[0] = 4 * doru
-        return
+        return hgtn, hn, code, FF
+
+    attim = 0
+    codeim = 9  # arbitrary nonzero number
+    
+    for i in range(1, mh):
+        atti = 0  # default until more definite information is available
+        im = i - 1
+        if hgtn[0, i] <= hgtn[1, im]:
+            if hn[1, 1, im] <= hn[0, 1, i]:
+                atti = 2  # ascending attitude at common time
+                code[i] = 2
+                if attim == 2 and (codeim == 0 or codeim == 2):
+                    code[im] = 8
+            elif hn[1, 0, im] >= hn[0, 0, i]:
+                atti = 1  # descending attitude at common time
+                code[i] = 3
+                if attim == 1 and (codeim == 0 or codeim == 3):
+                    code[im] = 4
+            else:
+                code[i] = 5
+                if hn[1, 0, im] <= hn[0, 1, i]:
+                    hn[0, 1, i] = hn[1, 0, im]
+                else:
+                    hn[1, 0, im] = hn[0, 1, i]
+                if hn[1, 1, im] <= hn[0, 0, i]:
+                    hn[1, 1, im] = hn[0, 0, i]
+                else:
+                    hn[0, 0, i] = hn[1, 1, im]
+        else:
+            if hn[1, 1, im] <= hn[0, 1, i]:
+                atti = 2  # ascending attitude at intermission
+                if attim == 2 and (codeim == 0 or codeim == 2):
+                    code[im] = 8
+            elif hn[1, 0, im] >= hn[0, 0, i]:
+                atti = 1  # descending attitude at intermission
+                if attim == 1 and (codeim == 0 or codeim == 3):
+                    code[im] = 4
+        attim = atti
+        codeim = code[i]
+        
+    return hgtn, hn, code, FF
+
 
 def set_posts(mh, mode, hgtn, hn): # , bend, hgtp, hp, off):
 # Given a set of mh double-gates (both descending and ascending types) and
@@ -1403,9 +1486,9 @@ def count_routes(n, code): # count, FF):
         if flag:
             return count, FF  # NickE might be break
         count += 1
-    FF = (count > ihu)
+    FF = (count > 1025)
     if FF:
-        print('In count_routes; number of routes exceeds allowance =', ihu)
+        print('In count_routes; number of routes exceeds allowance = 1025')
 
     return count, FF
 
@@ -1481,7 +1564,7 @@ def next_route(n, code, mode, flag):
     flag = True
     return mode, flag
 
-def slalom_tspline(n, bend, hgxn, yn, off, bigX, q, ya, en, ita, maxitb, ittot, FF):
+def slalom_tspline(n, bend, hgxn, yn, off, bigX) #, q, ya, en, ita, maxitb, ittot, FF):
 # NickE some are inout so I have to edit the line above
 
 # Fit a tensioned spline, characteristic abscissa scale, bigX, between the
@@ -1554,12 +1637,13 @@ def slalom_tspline(n, bend, hgxn, yn, off, bigX, q, ya, en, ita, maxitb, ittot, 
 # array, ya ("y actual").
 
 # NickE check all of this f or calls, missing stuff
+    FF = False
     xs = hgxn / bigX
 # Initialize the "A" iteration by fitting a feasible spline to as many
 # "gateposts" as is possible with distinct xs. A constraint i is signified
 # to be activated when logical array element, on(i), is true:
     hgxp = hgxn[0] - 1
-    on = [False] * n
+    on = [False] * n        ####NickE choosing not to trust codingfleet
     for i in range(n):
         if off[i]:
             on[i] = False
@@ -1568,15 +1652,15 @@ def slalom_tspline(n, bend, hgxn, yn, off, bigX, q, ya, en, ita, maxitb, ittot, 
         if on[i]:
             hgxp = hgxn[i]
     ittot = 1
-# Make the initial fit
-    fit_gtspline(n, xs, yn, on, qt, jump, yat, en, FF)
+# Make the initial fit      #####NickE end choosing not to trust codingfleet
+    qt, jump, yat, en, FF = fit_gtspline(n, xs, yn, on) # NickE #, qt, jump, yat, en, FF)
     ena = en
     if FF:
         print('In slalom_tspline; failure flag raised in call to fit_gtspline')
         print('at initialization of A loop')
-        return
+        return 0.0, 0.0, en, 0, ittot, 0, FF  #NickE closest i can get
 # loop over steps of iteration "A" to check for jump-sign violations
-    for ita in range(nita):
+    for ita in range(50):
         q = qt
         ya = yat
 # Determine whether there exists sign-violations in any active "jumps"
@@ -1600,14 +1684,14 @@ def slalom_tspline(n, bend, hgxn, yn, off, bigX, q, ya, en, ita, maxitb, ittot, 
             on[j] = True
 # Begin a new "B" iteration that adds as many new constraints as needed
 # to keep the new conditional minimum energy spline in the feasible region:
-        for itb in range(nitb):
-            fit_gtspline(n, xs, yn, on, qt, jump, yat, en, FF)
+        for itb in range(80):
+            qt, jump, yat, en, FF = fit_gtspline(n, xs, yn, on) #, qt, jump, yat, en, FF)
             if FF:
                 print('In slalom_tspline; failure flag raised in call to fit_gtspline')
                 print('at B loop, iterations ita, itb =', ita, itb)
-                return
+                return q, ya, en, ita, ittot, max(itb, 80), FF  #NickE 
             ittot += 1
-            fit_tspline()
+
 # Determine whether this "solution" wanders outside any slalom gates at
 # the unconstrained locations and identify and calibrate the worst violation.
 # In this case, sjmin, ends up being the under-relaxation coefficient
@@ -1627,7 +1711,7 @@ def slalom_tspline(n, bend, hgxn, yn, off, bigX, q, ya, en, ita, maxitb, ittot, 
                         sjmin = sj
             if j == 0:
                 break
-            solution as A # NickE WHAT
+
 # Back off to best feasible solution along this path, which modulates the
 # change just made by an underrelaxation factor, sjmin, and activate 
 # constraint j
@@ -1635,22 +1719,25 @@ def slalom_tspline(n, bend, hgxn, yn, off, bigX, q, ya, en, ita, maxitb, ittot, 
             q = q + sjmin * (qt - q)
             on[j] = True
         maxitb = max(maxitb, itb)
-        if itb > nitb:
+        if itb > 80:
             FF = True
             print('In slalom_tspline; exceeding the allocation of B iterations')
-            return
+            return q, ya, en, ita, ittot, max(itb, 80), FF
         q = qt
         ya = yat
         if en >= ena:
             print('In slalom_tspline; energy failed to decrease')
             break
         ena = en
-    if ita > nita:
+    if ita > 50:
         FF = True
         print('In slalom_tspline; exceeding the allocation of A iterations')
-        return
+        return q, ya, en, ita, ittot, max(itb, 80), FF
 
-def slalom_uspline(n, bend, hgxn, yn, off, halfgate, q, ya, en, ita, ittot, FF):
+    #NickE might not need the line below
+    return q, ya, en, ita, ittot, max(itb, 80), FF
+
+def slalom_uspline(n, bend, hgxn, yn, off, q, ya, en, ita, ittot, FF):
 # Like slalom_tspline, except this treats the special case where the spline
 # is untensioned, and therefore the characteristic scale in x become infinite,
 # and the spline becomes piecewise cubic instead of involving hyperbolic
@@ -1660,6 +1747,7 @@ def slalom_uspline(n, bend, hgxn, yn, off, halfgate, q, ya, en, ita, ittot, FF):
 #NickE like preious, check alls, inout, missing
     nita = 50
     nitb = 80
+    halfgate = np.float(30.0)
 # Initialize the "A" iteration by fitting a feasible spline to as many
 # "gateposts" as is possible with distinct xn. A constraint i is signified
 # to be activated when logical array element, on(i), is true:
@@ -1708,7 +1796,7 @@ def slalom_uspline(n, bend, hgxn, yn, off, halfgate, q, ya, en, ita, ittot, FF):
             on[j] = True
 # Begin a new "B" iteration that adds as many new constraints as needed
 # to keep the new conditional minimum energy spline in the feasible region:
-        for itb in range(1, nitb + 1):
+        for itb in range(1, 81): # 81 from nitb + 1
             fit_guspline(n, xs, yn, on, qt, jump, yat, en, FF)
             if FF:
                 print('In slalom_uspline; failure flag raised in call to fit_guspline')
@@ -1741,7 +1829,7 @@ def slalom_uspline(n, bend, hgxn, yn, off, halfgate, q, ya, en, ita, ittot, FF):
             q = q + sjmin * (qt - q)
             on[j] = True
         maxitb = max(maxitb, itb)
-        if itb > nitb:
+        if itb > 80:
             FF = True
             print('In slalom_uspline; exceeding the allocation of B iterations')
             return
@@ -1751,7 +1839,7 @@ def slalom_uspline(n, bend, hgxn, yn, off, halfgate, q, ya, en, ita, ittot, FF):
             print('In slalom_uspline; energy failed to decrease')
             break
         ena = en
-    if ita > nita:
+    if ita > 50:
         FF = True
         print('In slalom_uspline; exceeding the allocation of A iterations')
         return
@@ -1761,6 +1849,7 @@ def convertd(n, tdata, hdata, phof): #, doru, idx, hgts, hs, descending, FF):
 # gate=2*halfgate (in units of seconds) and expressed as even integer units
 # hgts of halfgate that correspond to the mid-time of each bin. (The two
 # limits of each time-bin are odd integers in halfgate units.)
+    halfgate = np.float(30)
     hour = 3600
     FF = False
 
@@ -1832,7 +1921,8 @@ def convertd(n, tdata, hdata, phof): #, doru, idx, hgts, hs, descending, FF):
     return doru, idx, hgts, hs, descending, FF
 
 
-def convertd_back(n, halfgate, wdata, tdata, ws, hgts, idx, descending):
+def convertd_back(n, wdata, tdata, ws, hgts, idx, descending):
+    halfgate = np.float(30)
 
     if len(ws) != n:
         raise ValueError('In convertd; inconsistent dimensions of ws')

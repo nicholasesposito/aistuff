@@ -165,7 +165,7 @@ def sub2mem_mer(proflun, bmiss, mxlv, mxnmev, maxmandlvls, mandlvls, mesgtype, h
         orders(1, iwork, lvlsinprof, iord, nlv2wrt_tot, 1, lwr, 2)
     
 ### NickE what do i do with write 41)
-    write(41, *) 'nlv2wrt_tot=', nlv2wrt_tot, 'c_acftreg=', c_acftreg1
+    print('nlv2wrt_tot=', nlv2wrt_tot, 'c_acftreg=', c_acftreg1)
     err_tspline = 0
     
 #### where 3 ended and 4 began
