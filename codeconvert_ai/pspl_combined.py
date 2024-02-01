@@ -204,8 +204,7 @@ def tbnewton(nh, m, hgts, hs, hgtp, p, q):
 #  height is he
         it = 1
         while it <= nit:
-# NickE
-            hac, dhadt = eval_tspline(m, tr, p, q, tee)
+            hac, dhadt = eval_tsplined(m, tr, p, q, tee)
             if it == 1:
                 dhdt[i] = dhadt / bigT
             if dhadt == 0:
@@ -490,25 +489,26 @@ def fit_guspline(n, xs, ys, on): #, q, j, yac, en, FF):
     ja = np.zeros(n)
     for i in range(n):
         if on[i]:
-            m = m + 1
-            xa[m-1] = xs[i]
-            ya[m-1] = ys[i]
-    fit_uspline(m, xa[:m], ya[:m], qa[:m], ja[:m], en, FF)
+            xa[m] = xs[i]
+            ya[m] = ys[i]
+            m += 1
+    qa, ja, en, FF = fit_uspline(m, xa[:m], ya[:m]) #, qa[:m], ja[:m], en, FF)
     if FF:
         print("In fit_guspline; failure flag raised at call to fit_uspline")
         return
     k = 0
     for i in range(n):
         if on[i]:
-            k = k + 1
-            q[i] = qa[k-1]
-            j[i] = ja[k-1]
+            q[i] = qa[k]
+            j[i] = ja[k]
             yac[i] = ys[i]
+            k += 1
         else:
-            eval_usplined(m, xa[:m], ya[:m], qa[:m], xs[i], yac[i], q[i])
+            yac[i], q[i] = eval_usplined(m, xa[:m], ya[:m], qa[:m], xs[i]) #, yac[i], q[i])
             j[i] = 0
 
-# NickE return? 
+    return q, j, yac, en, FF
+
 
 def fit_uspline(n, xs, p):
 # Solve for the coefficients, the 3rd-derivative jumps, and the energy,
@@ -535,7 +535,7 @@ def fit_uspline(n, xs, p):
         if xs[i-1] >= xs[i]:
             FF = True
             print("In fit_uspline; xs data must increase strictly monotonically")
-            return 
+            return None, None, None, FF 
 # Initialize qq = np.zeros((n, 2)) b/c symmetric tridiagonal, kernel for 
 #    q^T*QQ*q where "q" are the dp/dx at each node.
 # The coefficients in the quadratic form defining the spline energy also
@@ -544,6 +544,8 @@ def fit_uspline(n, xs, p):
 # the  matrices cqp and cpp which are simply diagonal. It is the symmetries
 # in the defiition of energy that allow this simplification.
 
+    q = np.zeros(n)
+    j = np.zeros(n)
     qq = np.zeros((n, 2))
     difp = np.zeros(n-1)
     cpp = np.zeros(n-1)
@@ -554,49 +556,41 @@ def fit_uspline(n, xs, p):
     for i in range(n-1):
         ip = i + 1
         difp[i] = p[ip] - p[i]
-        x = (xs[ip] - xs[i]) * 0.5
-        ch = np.cosh(x)
-        sh = np.sinh(x)
-        xcmsx2 = xcms(x) * 2
-        egg = x * sh / xcmsx2
-        ehh = ch / (2 * sh)
-# ccc is the coefficient of energy integral coupling g(i)*g(i) and g(ip)*g(ip)
-        ccc = egg + ehh
-# ccp[i] is Energy coefficient for difp(i)*difp(i)...
-        cpp[i] = ch / xcmsx2
-# cqp[i] is for difp(i)*sumq(i)
-        cqp[i] = -difp[i] * sh / xcmsx2
-        qq[i, 0] = qq[i, 0] + ccc
-        qq[ip, -1] = qq[ip, -1] + egg - ehh
-        qq[ip, 0] = qq[ip, 0] + ccc
-# NickE where do the next two lines come from?? line 643 in f90
-    qq[0, 0] = qq[0, 0] + 1
-    qq[n-1, 0] = qq[n-1, 0] + 1
-# Temporarily, q is made the vector of forcings in the tridiagonal linear
-# system from which the final spline coefficients, q, are solved in place.
-    q[:n-1] = -cqp
-    q[n-1] = 0
-    q[1:n] = q[1:n] - cqp
-# NickE return
-    ldltb(n, 1, qq)
-    ltdlbv(n, 1, qq, q)
-    sumq[:] = q[:n-1] + q[1:n]
+        x2 = xs[ip] - xs[i]
+        x = 0.5 * x2
+        xcmsx2 = (1 / 3) * x**3 * 2
+        ccc = 2 / x
+        cpp[i] = 1 / xcmsx2
+        cqp[i] = -difp[i] * x / xcmsx2
+        qq[i, 0] += ccc   #NickE not sure about this
+        if ip < n-1:       # NickE not sure about this
+            qq[ip, 0] += 1 / x  #NickE not sure about this
+        qq[ip, 0] += ccc   #NickE not sure about this
+
+    # Solve the tridiagonal system for q
+    q[:-1] = -cqp
+    q[1:] -= cqp
+    qq = ldltb(n, 1, qq) #NickE this should be good
+    q = ltdlbv(n, 1, qq, q)  #NickE this should be good
+#    q = solve_tridiagonal(qq, q)
+    sumq = q[:-1] + q[1:]
+
+    # Calculate minimizing energy
     en = 0.5 * (np.dot(difp**2, cpp) + np.dot(sumq, cqp))
-#NickE sb=0 so why does it say q[0] ugh
-    sb = q[0]
+
+    # Calculate the 3rd-derivative "jumps"
+    sb = 0
     for i in range(n-1):
         ip = i + 1
-        x = (xs[ip] - xs[i]) * 0.5
-        xcmsx2 = xcms(x) * 2
-        ch = np.cosh(x)
-        sh = np.sinh(x)
-        sap = (sh * sumq[i] - ch * difp[i]) / xcmsx2
-        sa = sap + q[i]
+        x = 0.5 * (xs[ip] - xs[i])
+        xcmsx2 = (1 / 3) * x**3 * 2
+        sa = (x * sumq[i] - difp[i]) / xcmsx2
         j[i] = sa - sb
-        sb = sap + q[ip]
-    j[n-1] = q[n-1] - sb
+        sb = sa
+    j[-1] = -sb
 
-#NickE return 
+    return q, j, en, FF
+
 
 def int_uspline(n, xs, p, q): # m
 # Take the sets of n parameters p and q of the untensioned cubic spline
@@ -604,9 +598,10 @@ def int_uspline(n, xs, p, q): # m
 # the value at the last node, assuming that the integral at the first node
 # is set to zero.
     m = np.zeros(n)
-    e = 0
+    e = 0.0
     for i in range(n-1):
         ip = i + 1
+        # Calculate half-width of the interval
         x = (xs[ip] - xs[i]) * 0.5
         t2 = x ** 2 * 0.5
         t3 = t2 * x / 3
@@ -615,13 +610,18 @@ def int_uspline(n, xs, p, q): # m
         pd = (p[ip] - p[i]) / (2 * x)
         qa = (q[ip] + q[i]) * 0.5
         qd = (q[ip] - q[i]) / (2 * x)
-# a,b,c,d are the Taylor coefficients of the cubic about the interval midpoint
+        # a,b,c,d are the Taylor coefficients of the cubic about the 
+        # interval midpoint
         c = qd
         a = pa - c * t2
         d = (qa - pd) * (3/2) / t2
         b = qa - d * t2
+        # Calculate the integral over the interval
         m[i] = e + a * x - b * t2 + c * t3 - d * t4
-        e = e + 2 * (a * x + c * t3)
+        # Update the running integral
+        e +=  2 * (a * x + c * t3)
+
+    # Set the last element to the total integral
     m[n-1] = e
     return m
 
@@ -821,63 +821,41 @@ def eval_tsplineddd(n, xs, p, q, x):
 
 def eval_itspline(n, xs, p, q, m, x):
 # Evaluate the integrated tension spline at x, returning the value, y.
-    ia = 0
-    ib = 0
-    xr = 0
-    xh = 0
-    pm = 0
-    qm = 0
-    qah = 0
-    qbh = 0
-    qxh = 0
-    qdh = 0
-    shh = 0
-    chh = 0
-    sh = 0
-    ch = 0
-    xcmsh = 0
-    shm = 0
-    chm = 0
-    shhm = 0
-    chhm = 0
     if x <= xs[0]:
         xr = x - xs[0]
-        y = p[0] * xr + q[0] * np.expmm(xr)
+        y = p[0] * xr + q[0] * expmm(xr)
         return y
     if x >= xs[n-1]:
         xr = x - xs[n-1]
-        y = m[n-1] + p[n-1] * xr + q[n-1] * np.expmm(-xr)
+        y = m[n-1] + p[n-1] * xr + q[n-1] * expmm(-xr)
         return y
     for ib in range(1, n):
         if xs[ib] <= xs[ib-1]:
-# only consider intervals of positive width
+            # only consider intervals of positive width
             continue
         if xs[ib] >= x:
-# exit once finite interval straddling x is found
+            # exit once finite interval straddling x is found
             break
     ia = ib - 1
-#NickE something wrong with all below this
-    xh = (xs[ib] - xs[ia]) * 0.5 #  halfwidth of interval
+    xh = (xs[ib] - xs[ia]) * 0.5 
+    shx = np.sinh(xh)
+    chmx = coshm(xh)
+    xcmsx = xcms(xh)
     xr = x - xs[ia] - xh
-    pm = (p[ib] + p[ia]) * 0.5
-    qm = (p[ib] - p[ia]) / (2 * xh)
-    qah = q[ia] * 0.5
-    qbh = q[ib] * 0.5
-    qxh = qah + qbh - qm
-    qdh = qbh - qah
-    shh = xh
-    chh = 1
-    sh = xr
-    ch = 1
-    shm = xr ** 3 / 6
-    chm = xr ** 2 * 0.5
-    shhm = xh ** 3 / 6
-    chhm = xh ** 2 * 0.5
-    xcmsh = xh ** 3 / 3
-    qdh = qdh / shh
-    qxh = qxh / xcmsh
-    y = m[ia] + pm * xr + qxh * (xh * shm - xr * shhm)
+    pa = (p[ib] + p[ia]) * 0.5
+    pd = (p[ib] - p[ia]) * 0.5 / xh
+    qa = (q[ib] + q[ia]) * 0.5
+    qd = (q[ib] - q[ia]) * 0.5 / shx
+    c = qd
+    a = pa - c * chmx
+    d = (qa - pd) * xh / xcmsx
+    b = qa - d * chmx
+    t2 = xr**2 / 2
+    shmx = sinhm(xr)
+    chmmx = coshmm(xr)
+    y = m[ia] + a * xr + b * t2 + c * shmx + d * chmmx
     return y
+
 
 def eval_uspline(n, xs, p, q, x):
 # Assuming the 1st derivatives, q, are correctly given at the n nodes, xs,
@@ -1091,6 +1069,8 @@ def eval_iuspline(n, xs, p, q, m, x):
         xr = x - xs[n-1]
         y = m[n-1] + p[n-1] * xr + q[n-1] * xr**2 * 0.5
         return y
+
+    # Find the interval that contains x   
     for ib in range(1, n):
         if xs[ib] <= xs[ib-1]:
             continue
@@ -1102,19 +1082,20 @@ def eval_iuspline(n, xs, p, q, m, x):
     t2 = xh**2 * 0.5
     t3 = t2 * xh / 3
     pa = (p[ib] + p[ia]) * 0.5
-    pd = (p[ib] - p[ia]) / xh
+    pd = (p[ib] - p[ia]) * 0.5 / xh
     qa = (q[ib] + q[ia]) * 0.5
-    qd = (q[ib] - q[ia]) / xh
+    qd = (q[ib] - q[ia]) * 0.5 / xh
 # a,b,c,d are the Taylor coefficients of the cubic about the interval midpoint
     c = qd
     a = pa - c * t2
-    d = (qa - pd) * 3/2 / t2
+    d = (qa - pd) * 1.5 / t2
     b = qa - d * t2
     t2 = xr**2 * 0.5
     t3 = t2 * xr / 3
     t4 = t3 * xr / 4
     y = m[ia] + a * xr + b * t2 + c * t3 + d * t4
     return y
+
 
 def best_tslalom(nh, mh, doru, hgts, hs):
 # Run through the different allowed routes between the slalom gates and
@@ -1755,6 +1736,7 @@ def slalom_uspline(n, bend, hgxn, yn, off, q, ya, en, ita, ittot, FF):
     hgxp = hgxn[0] - 1
     on = [False] * n
     FF = False
+
     for i in range(n):
         if off[i]:
             on[i] = False
@@ -1762,21 +1744,22 @@ def slalom_uspline(n, bend, hgxn, yn, off, q, ya, en, ita, ittot, FF):
         on[i] = hgxn[i] > hgxp
         if on[i]:
             hgxp = hgxn[i]
+
     ittot = 1
-    fit_guspline(n, xs, yn, on, qt, jump, yat, en, FF)
+    qt, jump, yat, en, FF = fit_guspline(n, xs, yn, on, qt, jump, yat, en, FF)
     ena = en
     if FF:
         print('In slalom_uspline; failure flag raised in call to fit_guspline')
         print('at initialization of A loop')
-        return
+        return None
 # loop over steps of iteration "A" to check for jump-sign violations
-    for ita in range(1, nita + 1):
-        q = qt # Copy solution vector q of nodal 1st-derivatives
-        ya = yat # Copy nodal intercepts
+    for ita in range(1, 51): # 51 = nita + 1 = 50 + 1
+        q = qt.copy() # Copy solution vector q of nodal 1st-derivatives
+        ya = yat.copy() # Copy nodal intercepts
 # Determine whether there exists sign-violations in any active "jumps"
 # of the 3rd derviative and, if so, inactivate (on==F) the constraints
 # at those points. Also, count the number, j, of such violations.
-        j = 0
+        j = -1
         k = 0
         sjmin = 0
         for i in range(n):
@@ -1788,30 +1771,32 @@ def slalom_uspline(n, bend, hgxn, yn, off, q, ya, en, ita, ittot, FF):
                 on[i] = False
             else:
                 k += 1 # new tally of constraints switched "on"
-        if j == 0:
-# Proper conditions for a solution are met
+        if j == -1:
+            # Proper conditions for a solution are met
             break
         if k == 0:
-# must leave at least one constraint "on"
+            # must leave at least one constraint "on"
             on[j] = True
-# Begin a new "B" iteration that adds as many new constraints as needed
-# to keep the new conditional minimum energy spline in the feasible region:
+        # Begin a new "B" iteration that adds as many new constraints as 
+        # needed to keep the new conditional minimum energy spline in the
+        # feasible region:
+
         for itb in range(1, 81): # 81 from nitb + 1
-            fit_guspline(n, xs, yn, on, qt, jump, yat, en, FF)
+            qt, jump, yat, en, FF = fit_guspline(n, xs, yn, on) # qt, jump, yat, en, FF)
             if FF:
                 print('In slalom_uspline; failure flag raised in call to fit_guspline')
                 print('at B loop, iterations ita,itb = ', ita, itb)
                 return
             ittot += 1 # Increment the running total of calls to fit_uspline
-            fit_uspline()
+
 # Determine whether this "solution" wanders outside any slalom gates at
 # the unconstrained locations and identify and calibrate the worst violation.
 # In this case, sjmin, ends up being the under-relaxation coefficient
 # by which we need to multiply this new increment in order to just stay
 # within the feasible region of spline space, and constraint j must be
 # switched "on":
-            j = 0
-            sjmin = u1
+            j = -1 
+            sjmin = 1.0 
             for i in range(n):
                 if on[i] or off[i]:
                     continue
@@ -1822,9 +1807,9 @@ def slalom_uspline(n, bend, hgxn, yn, off, q, ya, en, ita, ittot, FF):
                         j = i
                         sjmin = sj
             if j == 0:
-# spline is feasible, exit B loop and adopt solution as A
+                # spline is feasible, exit B loop and adopt solution as A
                 break
-            solution as A # NICKE OMG
+            # solution as A # NICKE OMG
             ya = ya + sjmin * (yat - ya)
             q = q + sjmin * (qt - q)
             on[j] = True
@@ -1832,9 +1817,9 @@ def slalom_uspline(n, bend, hgxn, yn, off, q, ya, en, ita, ittot, FF):
         if itb > 80:
             FF = True
             print('In slalom_uspline; exceeding the allocation of B iterations')
-            return
-        q = qt
-        ya = yat
+            return None
+        q = qt.copy()
+        ya = yat.copy()
         if en >= ena:
             print('In slalom_uspline; energy failed to decrease')
             break
@@ -1842,7 +1827,10 @@ def slalom_uspline(n, bend, hgxn, yn, off, q, ya, en, ita, ittot, FF):
     if ita > 50:
         FF = True
         print('In slalom_uspline; exceeding the allocation of A iterations')
-        return
+        return None
+
+    return q, ya, en, ita, ittot, maxitb, FF
+
 
 def convertd(n, tdata, hdata, phof): #, doru, idx, hgts, hs, descending, FF):
 # tdata (in single precision real hours) is discretized into bins of size
